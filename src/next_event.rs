@@ -1,3 +1,5 @@
+use std::env;
+
 use crate::{
     database,
     models::{Root, Timetable},
@@ -11,7 +13,7 @@ pub async fn fetch_events() -> Result<Option<()>, reqwest::Error> {
 
     let body = client
         .get(F1_API_ENDPOINT)
-        .header("apiKey", "qPgPPRJyGCIPxFT3el4MF7thXHyJCzAP")
+        .header("apiKey", env::var("F1_API_KEY").unwrap())
         .header("locale", "en")
         .send()
         .await?
@@ -30,7 +32,6 @@ pub async fn fetch_events() -> Result<Option<()>, reqwest::Error> {
 
     if !upcoming_sessions.is_empty() {
         database::insert_events(&session.race.meeting_official_name, upcoming_sessions);
-
         Ok(Some(()))
     } else {
         Ok(None)
