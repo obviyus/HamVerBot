@@ -1,11 +1,15 @@
 [package]
-name = "hamverbot"
+name = "HamVerBot"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Ayaan Zaidi <hi@obviy.us>"]
+description = "Steward of #f1 on Libera.Chat"
+license = "MIT"
+repository = "https://github.com/obviyus/hamverbot"
 
 [dependencies]
+log = "0.4.0"
+env_logger = "0.8.4"
 irc = "0.15.0"
 tokio = { version = "1.17.0", features = ["full"] }
 futures = "0.3.21"
