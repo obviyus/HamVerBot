@@ -5,34 +5,45 @@ mod next_event;
 
 use futures::prelude::*;
 use irc::client::prelude::*;
+use log::{error, info};
 use std::time::Duration;
-use serde::__private::de::IdentifierDeserializer;
 
 #[tokio::main]
 async fn main() -> irc::error::Result<()> {
+    env_logger::init();
+
     let config = Config::load("./config.toml").unwrap();
+
+    // info!("Revving up 🏎️ {}... ", config.username.unwrap());
 
     let command_prefix = match config.options.get("command_prefix") {
         Some(prefix) => prefix.to_string(),
         None => "!".to_string(),
     };
+    info!("Command prefix: {}", command_prefix);
 
-    println!("PREFIX: {}", command_prefix);
-
-    database::init_db();
+    match database::init_db() {
+        Ok(_) => info!("Database initialized successfully."),
+        Err(e) => error!("Error initializing database: {}", e),
+    }
 
     let mut client = Client::from_config(config).await?;
     client.identify()?;
 
+    // Separate sender for tasks that need to be run in the background
     let sender = client.sender();
 
     tokio::spawn(async move {
+        // Small buffer to give the bot enough time to connect
         tokio::time::sleep(Duration::from_secs(10)).await;
+
+        // Perform checks every 5 minutes
         let mut interval = tokio::time::interval(Duration::from_secs(300));
 
         loop {
             interval.tick().await;
 
+            // Read the latest result; only deliver it if "path" is not present in the database
             match event_results::read_result().await {
                 Ok(result_string) => {
                     if let Some(result_string) = result_string {
@@ -40,33 +51,31 @@ async fn main() -> irc::error::Result<()> {
                     }
                 }
                 Err(e) => {
-                    sender.send_privmsg("#obviyus", e);
+                    error!("Error reading result: {}", e);
                 }
             }
 
-            println!("RESULT READ; CHECKING EVENTS");
-
+            // Load upcoming events into the database. If the next event is within 5 minutes
+            // send a message to the channel. If no event is found, poll API for a new list.
             match database::next_event() {
-                Ok(event) => match event {
-                    Some((formatted_string, _event_name, event_time)) => {
-                        if event_time - chrono::Utc::now() < chrono::Duration::minutes(5) {
-                            sender.send_privmsg("#obviyus", formatted_string);
-                        }
+                Some((formatted_string, _event_name, event_time)) => {
+                    if event_time - chrono::Utc::now() < chrono::Duration::minutes(5) {
+                        sender.send_privmsg("#obviyus", formatted_string);
                     }
-                    None => {
-                        next_event::fetch_events().await;
+                }
+                None => match next_event::fetch_events().await {
+                    Ok(_) => todo!(),
+                    Err(e) => {
+                        error!("Error fetching events: {}", e);
                     }
                 },
-                Err(e) => {
-                    sender.send_privmsg("#obviyus", e);
-                }
             }
         }
     });
 
     let mut stream = client.stream()?;
     while let Some(message) = stream.next().await.transpose()? {
-        print!("{}", message);
+        info!("{}", message);
 
         match message.command {
             Command::INVITE(ref _target, ref msg) => {
@@ -79,53 +88,51 @@ async fn main() -> irc::error::Result<()> {
                         "ping" => {
                             client.send_privmsg(target, "pong")?;
                         }
-                        "countdown" => {
-                            match database::next_event() {
-                                Ok(event) => match event {
-                                    Some((_formatted_string, event_name, event_time)) => {
-                                        let time_left = event_time - chrono::Utc::now();
-                                        let time_left_string: String;
+                        "countdown" => match database::next_event() {
+                            Some((_formatted_string, event_name, event_time)) => {
+                                let time_left = event_time - chrono::Utc::now();
+                                let time_left_string: String;
 
-                                        if time_left.num_days() > 0 {
-                                            let day_string_ending = if time_left.num_days() > 1 { "s" } else { "" };
-                                            time_left_string = format!(
-                                                "{} day{}",
-                                                time_left.num_days(),
-                                                day_string_ending
-                                            );
-                                        } else if time_left.num_hours() > 0 {
-                                            let hour_string_ending = if time_left.num_hours() > 1 { "s" } else { "" };
-                                            time_left_string = format!(
-                                                "{} hour{}",
-                                                time_left.num_hours(),
-                                                hour_string_ending
-                                            );
-                                        } else if time_left.num_minutes() > 0 {
-                                            let minute_string_ending = if time_left.num_minutes() > 1 { "s" } else { "" };
-                                            time_left_string = format!(
-                                                "{} minute{}",
-                                                time_left.num_minutes(),
-                                                minute_string_ending
-                                            );
-                                        } else {
-                                            time_left_string = "0 seconds.".to_string();
-                                        }
-
-                                        client.send_privmsg(target, format!(
-                                            "🏎️ \x02{}\x02 begins in {}",
-                                            event_name,
-                                            time_left_string
-                                        ))?;
-                                    }
-                                    None => {
-                                        client.send_privmsg(target, "No upcoming events found.")?;
-                                    }
-                                },
-                                Err(e) => {
-                                    client.send_privmsg(target, e)?;
+                                if time_left.num_days() > 0 {
+                                    let day_string_ending =
+                                        if time_left.num_days() > 1 { "s" } else { "" };
+                                    time_left_string = format!(
+                                        "{} day{}",
+                                        time_left.num_days(),
+                                        day_string_ending
+                                    );
+                                } else if time_left.num_hours() > 0 {
+                                    let hour_string_ending =
+                                        if time_left.num_hours() > 1 { "s" } else { "" };
+                                    time_left_string = format!(
+                                        "{} hour{}",
+                                        time_left.num_hours(),
+                                        hour_string_ending
+                                    );
+                                } else if time_left.num_minutes() > 0 {
+                                    let minute_string_ending =
+                                        if time_left.num_minutes() > 1 { "s" } else { "" };
+                                    time_left_string = format!(
+                                        "{} minute{}",
+                                        time_left.num_minutes(),
+                                        minute_string_ending
+                                    );
+                                } else {
+                                    time_left_string = "0 seconds.".to_string();
                                 }
+
+                                client.send_privmsg(
+                                    target,
+                                    format!(
+                                        "🏎️ \x02{}\x02 begins in {}",
+                                        event_name, time_left_string
+                                    ),
+                                )?;
                             }
-                        }
+                            None => {
+                                client.send_privmsg(target, "No upcoming events found.")?;
+                            }
+                        },
                         _ => {}
                     }
                 }
