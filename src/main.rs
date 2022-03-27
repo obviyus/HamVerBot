@@ -57,7 +57,7 @@ async fn main() -> irc::error::Result<()> {
             match event_results::read_result().await {
                 Ok(result_string) => {
                     if let Some(result_string) = result_string {
-                        sender.send_privmsg("#obviyus", &result_string);
+                        sender.send_privmsg("#f1", &result_string);
                     }
                 }
                 Err(e) => {
@@ -70,7 +70,7 @@ async fn main() -> irc::error::Result<()> {
             match database::next_event() {
                 Some((formatted_string, _event_name, event_time)) => {
                     if event_time - chrono::Utc::now() < chrono::Duration::minutes(5) {
-                        sender.send_privmsg("#obviyus", formatted_string);
+                        sender.send_privmsg("#f1", formatted_string);
                     }
                 }
                 None => match next_event::fetch_events().await {
@@ -121,6 +121,7 @@ async fn main() -> irc::error::Result<()> {
                         }
                         "countdown" => match database::next_event() {
                             Some((_formatted_string, event_name, event_time)) => {
+                                // TODO: Refactor string building logic                                
                                 let time_left = event_time - chrono::Utc::now();
                                 let time_left_string: String;
 
