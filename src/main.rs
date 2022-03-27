@@ -14,7 +14,7 @@ async fn main() -> irc::error::Result<()> {
 
     let config = Config::load("./config.toml").unwrap();
 
-    // info!("Revving up 🏎️ {}... ", config.username.unwrap());
+    info!("🏎️ Revving up {}... ", config.nickname.as_ref().unwrap());
 
     let command_prefix = match config.options.get("command_prefix") {
         Some(prefix) => prefix.to_string(),
@@ -27,8 +27,18 @@ async fn main() -> irc::error::Result<()> {
         Err(e) => error!("Error initializing database: {}", e),
     }
 
-    let mut client = Client::from_config(config).await?;
-    client.identify()?;
+    let mut client = Client::from_config(config.clone()).await?;
+
+    // Handle SASL authentication manually
+    // https://github.com/aatxe/irc/issues/218
+    client.send_cap_req(&[Capability::Sasl])?;
+    client.send(Command::PASS(config.password.as_ref().unwrap().to_string()))?;
+    client.send(Command::NICK(config.nickname.as_ref().unwrap().to_string()))?;
+    client.send(Command::USER(
+        config.nickname()?.to_string(),
+        "0".to_owned(),
+        config.nickname()?.to_string(),
+    ))?;
 
     // Separate sender for tasks that need to be run in the background
     let sender = client.sender();
@@ -76,8 +86,29 @@ async fn main() -> irc::error::Result<()> {
     let mut stream = client.stream()?;
     while let Some(message) = stream.next().await.transpose()? {
         info!("{}", message);
-
         match message.command {
+            Command::CAP(_, ref subcommand, _, _) => {
+                if subcommand.to_str() == "ACK" {
+                    info!("Received ack for sasl");
+                    client.send_sasl_plain()?;
+                }
+            }
+            Command::AUTHENTICATE(_) => {
+                info!("Got signal to continue authenticating");
+                client.send(Command::AUTHENTICATE(base64::encode(format!(
+                    "{}\x00{}\x00{}",
+                    config.nickname()?.to_string(),
+                    config.nickname()?.to_string(),
+                    config.password().to_string()
+                ))))?;
+                client.send(Command::CAP(None, "END".parse().unwrap(), None, None))?;
+            }
+            Command::Response(code, _) => {
+                if code == Response::RPL_SASLSUCCESS {
+                    info!("Successfully authenticated");
+                    client.send(Command::CAP(None, "END".parse().unwrap(), None, None))?;
+                }
+            }
             Command::INVITE(ref _target, ref msg) => {
                 client.send_join(msg)?;
             }
