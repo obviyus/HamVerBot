@@ -22,6 +22,13 @@ async fn main() -> irc::error::Result<()> {
     };
     info!("Command prefix: {}", command_prefix);
 
+    let channels = config
+        .channels()
+        .iter()
+        .map(|c| c.to_string())
+        .collect::<Vec<_>>();
+    info!("Joining channels: {}", channels.join(", "));
+
     match database::init_db() {
         Ok(_) => info!("Database initialized successfully."),
         Err(e) => error!("Error initializing database: {}", e),
@@ -37,7 +44,7 @@ async fn main() -> irc::error::Result<()> {
     client.send(Command::USER(
         config.nickname()?.to_string(),
         "0".to_owned(),
-        config.nickname()?.to_string(),
+        config.real_name().to_string(),
     ))?;
 
     // Separate sender for tasks that need to be run in the background
@@ -57,7 +64,14 @@ async fn main() -> irc::error::Result<()> {
             match event_results::read_result().await {
                 Ok(result_string) => {
                     if let Some(result_string) = result_string {
-                        sender.send_privmsg("#f1", &result_string);
+                        channels.iter().for_each(|channel| {
+                            sender
+                                .send(Command::PRIVMSG(
+                                    channel.to_string(),
+                                    result_string.to_string(),
+                                ))
+                                .unwrap();
+                        });
                     }
                 }
                 Err(e) => {
@@ -70,7 +84,14 @@ async fn main() -> irc::error::Result<()> {
             match database::next_event() {
                 Some((formatted_string, _event_name, event_time)) => {
                     if event_time - chrono::Utc::now() < chrono::Duration::minutes(5) {
-                        sender.send_privmsg("#f1", formatted_string);
+                        channels.iter().for_each(|channel| {
+                            sender
+                                .send(Command::PRIVMSG(
+                                    channel.to_string(),
+                                    formatted_string.to_string(),
+                                ))
+                                .unwrap();
+                        });
                     }
                 }
                 None => match next_event::fetch_events().await {
@@ -121,7 +142,7 @@ async fn main() -> irc::error::Result<()> {
                         }
                         "countdown" => match database::next_event() {
                             Some((_formatted_string, event_name, event_time)) => {
-                                // TODO: Refactor string building logic                                
+                                // TODO: Refactor string building logic
                                 let time_left = event_time - chrono::Utc::now();
                                 let time_left_string: String;
 
