@@ -30,4 +30,4 @@ jobs:
           prerelease: false
           title: "v0.0.1"
           files: |
-              ./target/release/hamverbot
+              ./target/release/HamVerBot
