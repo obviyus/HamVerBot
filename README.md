@@ -36,3 +36,6 @@ To run the bot,
 ```bash
 RUST_LOG=info F1_API_KEY='your-api-key' cargo run
 ```
+
+## Libera #f1 Hall of Fame
+Oblivion, obviyus, ordos, and all the other nicknames beginning with 'o'. Sorry eff.
