@@ -15,6 +15,7 @@ Cargo.lock
 
 # IDE
 .idea/
+.vscode/
 
 # Configs
 config.toml
