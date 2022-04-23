@@ -3,6 +3,7 @@ mod event_results;
 mod models;
 mod next_event;
 
+use chrono::{Utc, Timelike};
 use futures::prelude::*;
 use irc::client::prelude::*;
 use log::{error, info};
@@ -14,7 +15,7 @@ async fn main() -> irc::error::Result<()> {
 
     let config = Config::load("./config.toml").unwrap();
 
-    info!("🏎️ Revving up {}... ", config.nickname.as_ref().unwrap());
+    info!("Revving up {}... ", config.nickname.as_ref().unwrap());
 
     let command_prefix = match config.options.get("command_prefix") {
         Some(prefix) => prefix.to_string(),
@@ -51,8 +52,10 @@ async fn main() -> irc::error::Result<()> {
     let sender = client.sender();
 
     tokio::spawn(async move {
-        // Small buffer to give the bot enough time to connect
-        tokio::time::sleep(Duration::from_secs(10)).await;
+        // Sleep until the start of the next 5th minute
+        let time_to_sleep = (5 - (Utc::now().minute()) % 5) * 60 + (60 - Utc::now().second());
+        info!("Sleeping worker threads for {} seconds.", time_to_sleep);
+        tokio::time::sleep(Duration::from_secs(time_to_sleep.into())).await;
 
         // Perform checks every 5 minutes
         let mut interval = tokio::time::interval(Duration::from_secs(300));
@@ -80,7 +83,7 @@ async fn main() -> irc::error::Result<()> {
             }
 
             // Load upcoming events into the database. If the next event is within 5 minutes
-            // send a message to the channel. If no event is found, poll API for a new list.
+            // send a message to the channels. If no event is found, poll API for a new list.
             match database::next_event() {
                 Some((formatted_string, _event_name, event_time)) => {
                     if event_time - chrono::Utc::now() < chrono::Duration::minutes(5) {
@@ -110,7 +113,7 @@ async fn main() -> irc::error::Result<()> {
         match message.command {
             Command::CAP(_, ref subcommand, _, _) => {
                 if subcommand.to_str() == "ACK" {
-                    info!("Received ack for sasl");
+                    info!("Received ack for SASL authentication.");
                     client.send_sasl_plain()?;
                 }
             }

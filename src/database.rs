@@ -60,7 +60,7 @@ pub fn insert_events(meeting_name: &str, timetable: Vec<&Timetable>) {
                 &format!("{} {}", &event.start_time, &event.gmt_offset),
                 "%Y-%m-%dT%H:%M:%S %:z",
             ) {
-                Ok(start_time) => start_time,
+                Ok(start_time) => start_time.naive_utc(),
                 Err(e) => {
                     error!("Failed to parse start_time: {}", e);
                     return;
