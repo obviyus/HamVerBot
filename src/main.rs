@@ -169,7 +169,7 @@ async fn main() -> irc::error::Result<()> {
                                     if time_left.num_hours() == 1 {
                                         time_left_string.push_str(&format!(
                                             " and {} minute{}",
-                                            time_left.num_minutes(),
+                                            time_left.num_minutes() - 60,
                                             if time_left.num_minutes() > 1 { "s" } else { "" }
                                         ));
                                     }
