@@ -3,7 +3,7 @@ mod event_results;
 mod models;
 mod next_event;
 
-use chrono::{Utc, Timelike};
+use chrono::{Timelike, Utc};
 use futures::prelude::*;
 use irc::client::prelude::*;
 use log::{error, info};
@@ -147,7 +147,7 @@ async fn main() -> irc::error::Result<()> {
                             Some((_formatted_string, event_name, event_time)) => {
                                 // TODO: Refactor string building logic
                                 let time_left = event_time - chrono::Utc::now();
-                                let time_left_string: String;
+                                let mut time_left_string: String;
 
                                 if time_left.num_days() > 0 {
                                     let day_string_ending =
@@ -165,6 +165,14 @@ async fn main() -> irc::error::Result<()> {
                                         time_left.num_hours(),
                                         hour_string_ending
                                     );
+
+                                    if time_left.num_hours() == 1 {
+                                        time_left_string.push_str(&format!(
+                                            " and {} minute{}",
+                                            time_left.num_minutes(),
+                                            if time_left.num_minutes() > 1 { "s" } else { "" }
+                                        ));
+                                    }
                                 } else if time_left.num_minutes() > 0 {
                                     let minute_string_ending =
                                         if time_left.num_minutes() > 1 { "s" } else { "" };
