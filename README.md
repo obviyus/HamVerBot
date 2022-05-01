@@ -6,9 +6,10 @@
 Rust [`irc`](https://crates.io/crates/irc) crate.
 
 ## Features
+
 - `!next` to reply with time until the next event
 - automatically send a message 5 minutes before the next event starts
-- post results of an event to the channels 
+- post results of an event to the channels
 
 ## Getting Started
 
@@ -45,3 +46,7 @@ To run the bot,
 ```bash
 RUST_LOG=info F1_API_KEY='your-api-key' cargo run
 ```
+
+## Contributing
+
+This repository uses the automated [`semantic-release`](https://github.com/semantic-release/semantic-release) suite of tools to generate version numbers. All commit messages **must** to the [Angular Commit Message conventions](https://github.com/angular/angular/blob/master/CONTRIBUTING.md#-commit-message-format).
