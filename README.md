@@ -1,8 +1,9 @@
 # HamVerBot
 
-[![Build](https://github.com/obviyus/hamverbot/actions/workflows/build.yml/badge.svg)](https://github.com/obviyus/hamverbot/actions/workflows/build.yml)
+[![Build](https://github.com/obviyus/HamVerBot/actions/workflows/build.yml/badge.svg)](https://github.com/obviyus/HamVerBot/actions/workflows/build.yml)
 
-#f1's favourite F1 bot running on [Libera.Chat](https://libera.chat/) built using the Rust [`irc`](https://crates.io/crates/irc) crate.
+#f1's favourite F1 bot running on [Libera.Chat](https://libera.chat/) built using the
+Rust [`irc`](https://crates.io/crates/irc) crate.
 
 ## Getting Started
 
@@ -22,7 +23,7 @@ channels = ["#f1"]
 umodes = "+RB-x"
 user_info = "IRC bot for #f1"
 version = "irc:git:Rust"
-source = "https://github.com/obviyus/hamverbot"
+source = "https://github.com/obviyus/HamVerBot"
 ping_time = 180
 ping_timeout = 20
 burst_window_length = 8
