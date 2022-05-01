@@ -18,23 +18,6 @@ const RESULTS: &str = "CREATE TABLE IF NOT EXISTS results (
     end_time INTEGER NOT NULL
  )";
 
-// Enum for messages to the database thread
-#[derive(Debug)]
-pub enum DatabaseMessage {
-    InsertEvent(String, String, i64),
-    InsertResult(String, i64),
-    NextEvent(Option<String>),
-    CheckResultDelivery(String),
-}
-
-// Enum for messages from the database thread
-#[derive(Debug)]
-pub enum DatabaseResponse {
-    Event(String, (String, String, i64)),
-    NoEvent(Option<String>),
-    IsResultDelivered(String, bool),
-}
-
 // Event describes a meeting that is scheduled for a certain time. It is
 // a representation of a row in the `events` table.
 #[derive(Debug)]

@@ -4,7 +4,8 @@ mod database;
 mod fetch;
 mod message;
 mod models;
-use crate::{authenticate::authenticate, database::Event};
+mod worker;
+use crate::authenticate::authenticate;
 use chrono::{Timelike, Utc};
 use futures::StreamExt;
 use irc::client::prelude::*;
@@ -17,7 +18,7 @@ async fn main() -> irc::error::Result<()> {
 
     let config = match config::load_config() {
         Ok(config) => config,
-        Err(e) => {
+        Err(_e) => {
             exit(1);
         }
     };
@@ -58,62 +59,13 @@ async fn main() -> irc::error::Result<()> {
 
         loop {
             interval.tick().await;
-
-            // Read the latest result; only deliver it if "path" is not present in the database
-            match fetch::read_current_event().await {
-                Ok((path, completed)) => {
-                    let delivered = database::is_event_delivered(thread_pool.clone(), &path)
-                        .await
-                        .unwrap();
-                    if completed && !delivered {
-                        let standings = fetch::driver_standings(path).await.unwrap();
-
-                        // Send the result to all channels
-                        for channel in channels.iter() {
-                            thread_client.send_privmsg(channel, &standings).unwrap();
-                        }
-                    }
-                }
+            match worker::worker(thread_pool.clone(), thread_client.clone(), channels.clone()).await
+            {
+                Ok(_) => {}
                 Err(e) => {
-                    error!("Failed to read current event: {}", e);
+                    error!("Failed to run worker: {:?}", e);
                 }
             };
-
-            // Load upcoming events into the database. If the next event is within 5 minutes
-            // send a message to the channels. If no event is found, poll API for a new list.
-            match database::next_event(thread_pool.clone()).await.unwrap() {
-                Some((name, description, start_time)) => {
-                    if (start_time - Utc::now().timestamp()) < 300 {
-                        for channel in channels.iter() {
-                            thread_client.send_privmsg(
-                                channel,
-                                message::string_builder(
-                                    format!("{}: {}", name, description).as_str(),
-                                    start_time,
-                                ),
-                            );
-                        }
-                    }
-                }
-                None => match fetch::fetch_events().await.unwrap() {
-                    Some(events) => {
-                        for (name, description, start_time) in events {
-                            database::insert_event(
-                                thread_pool.clone(),
-                                Event {
-                                    id: 0,
-                                    meeting_name: name,
-                                    description,
-                                    start_time,
-                                },
-                            );
-                        }
-                    }
-                    None => {
-                        error!("No events found.");
-                    }
-                },
-            }
         }
     });
 
@@ -152,13 +104,19 @@ async fn main() -> irc::error::Result<()> {
             Command::PRIVMSG(ref target, ref msg) => {
                 if msg.starts_with(&config.command_prefix) {
                     let command = &msg[config.command_prefix.len()..];
-                    message::handle_irc_message(
+                    match message::handle_irc_message(
                         client_clone.clone(),
                         db_pool.clone(),
                         command,
                         target,
                     )
-                    .await;
+                    .await
+                    {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("Failed to handle message: {:?}", e);
+                        }
+                    };
                 }
             }
 
