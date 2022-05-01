@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Ayaan Zaidi <hi@obviy.us>"]
 description = "Steward of #f1 on Libera.Chat"
 license = "MIT"
-repository = "https://github.com/obviyus/hamverbot"
+repository = "https://github.com/obviyus/HamVerBot"
 
 [dependencies]
 base64 = "0.13.0"
@@ -14,7 +14,9 @@ env_logger = "0.8.4"
 futures = "0.3.21"
 irc = "0.15.0"
 log = "0.4.0"
-reqwest = { version = "0.11", features = ["json"] }
+r2d2 = "0.8.9"
+r2d2_sqlite = "0.20.0"
+reqwest = { version = "0.11", features = ["json"]  }
 rusqlite = { version = "0.27.0", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -1,9 +1,9 @@
+name: Build and Release
+
 on:
   push:
     branches:
       - "master"
-
-name: Build and Release
 
 jobs:
   build:
@@ -23,11 +23,7 @@ jobs:
           command: build
           args: --release --all-features
 
-      - uses: "marvinpinto/action-automatic-releases@latest"
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "v0.0.1"
-          prerelease: false
-          title: "v0.0.1"
-          files: |
-              ./target/release/HamVerBot
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
