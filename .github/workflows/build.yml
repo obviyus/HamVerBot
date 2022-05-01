@@ -29,4 +29,5 @@ jobs:
 
         run: |
           npm i -g semantic-release @semantic-release/exec @semantic-release/changelog
+          cargo install semantic-release-rust --version 1.0.0-alpha.8
           semantic-release
