@@ -1,9 +1,9 @@
+name: Build and Release
+
 on:
   push:
     branches:
       - "master"
-
-name: Build and Release
 
 jobs:
   build:
@@ -30,4 +30,4 @@ jobs:
           prerelease: false
           title: "v0.0.1"
           files: |
-              ./target/release/HamVerBot
+            ./target/release/HamVerBot
