@@ -5,6 +5,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
+      - name: Lint Commit Messages
+        uses: wagoid/commitlint-github-action@v4
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
