@@ -3,6 +3,7 @@
     "master"
   ],
   "plugins": [
+    "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     [
       "@semantic-release/github",
@@ -10,9 +11,16 @@
         "assets": [
           {
             "path": "./target/release/HamVerBot",
-            "label": "HamVerBot Binary"
+            "label": "HamVerBot"
           }
         ]
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "verifyCmd": "semantic-release-rust verify-conditions",
+        "prepareCmd": "semantic-release-rust prepare ${nextRelease.version}"
       }
     ]
   ]
