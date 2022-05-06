@@ -56,7 +56,7 @@ pub(crate) fn string_builder(event_name: &str, event_time: i64) -> String {
 
         time_left_string.push_str(&format!(
             " and {} minute{}",
-            time_left.num_minutes() - 60,
+            time_left.num_minutes() % 60,
             if time_left.num_minutes() > 1 { "s" } else { "" }
         ));
     } else if time_left.num_minutes() > 0 {
