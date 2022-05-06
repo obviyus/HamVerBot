@@ -49,7 +49,7 @@ async fn main() -> irc::error::Result<()> {
     let thread_client = client_clone.clone();
     tokio::spawn(async move {
         // Sleep until the start of the next 5th minute
-        let time_to_sleep = (5 - (Utc::now().minute()) % 5) * 60 + (60 - Utc::now().second());
+        let time_to_sleep = (5 - (Utc::now().minute()) % 5) * 60 + (60 - Utc::now().second()) - 60;
         info!("Sleeping worker threads for {} seconds.", time_to_sleep);
 
         tokio::time::sleep(Duration::from_secs(time_to_sleep.into())).await;

@@ -21,13 +21,20 @@ pub async fn worker(
             let delivered = database::is_event_delivered(thread_pool.clone(), &path)
                 .await
                 .unwrap();
+
             if completed && !delivered {
-                let standings = fetch::driver_standings(path).await.unwrap();
+                let standings = fetch::driver_standings(&path).await.unwrap();
 
                 // Send the result to all channels
                 for channel in channels.iter() {
                     thread_client.send_privmsg(channel, &standings)?;
                 }
+
+                // Mark the event as delivered
+                match database::insert_result(thread_pool.clone(), &path) {
+                    Ok(_) => {},
+                    Err(e) => error!("Failed to insert result for {}: {}", path, e),
+                };
             }
         }
         Err(e) => {
