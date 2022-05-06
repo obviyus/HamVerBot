@@ -123,12 +123,13 @@ pub fn insert_event(pool: Pool<SqliteConnectionManager>, event: Event) -> Result
 // Given an EventResult with a path and an end_time, insert the result into the database.
 pub fn insert_result(
     pool: Pool<SqliteConnectionManager>,
-    result: EventResult,
+    path: &str,
 ) -> Result<(), Error> {
     let conn = pool.get().unwrap();
     let mut stmt = conn.prepare("INSERT INTO results (path, end_time) VALUES (?1, ?2)")?;
 
-    stmt.execute(params![result.path, result.end_time])?;
+    // FIXME: Add migration to drop end_time column
+    stmt.execute(params![path, 0])?;
 
     Ok(())
 }

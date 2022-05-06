@@ -6,7 +6,7 @@ const F1_API_ENDPOINT: &str = "https://api.formula1.com/v1/event-tracker";
 const F1_SESSION_ENDPOINT: &str = "https://livetiming.formula1.com/static";
 
 // Fetch driver standings of the given Path
-pub async fn driver_standings(path: String) -> Result<String, reqwest::Error> {
+pub async fn driver_standings(path: &str) -> Result<String, reqwest::Error> {
     let body = reqwest::get(format!("{}/{}SPFeed.json", F1_SESSION_ENDPOINT, &path))
         .await?
         .text_with_charset("utf-8-sig")
