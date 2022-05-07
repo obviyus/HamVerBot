@@ -46,7 +46,7 @@ pub async fn worker(
     // send a message to the channels. If no event is found, poll API for a new list.
     match database::next_event(thread_pool.clone()).await.unwrap() {
         Some((name, description, start_time)) => {
-            if (start_time - Utc::now().timestamp()) < 300 {
+            if (start_time - Utc::now().timestamp()) <= 300 {
                 for channel in channels.iter() {
                     thread_client.send_privmsg(
                         channel,
