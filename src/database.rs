@@ -73,7 +73,7 @@ pub async fn next_event(
 
     if let Some(event) = rows.next() {
         let event = event?;
-        info!("Next event: {:?}", event.meeting_name);
+        info!("Next event: {} {} at {}", event.meeting_name, event.description, event.start_time);
         Ok(Some((
             event.meeting_name,
             event.description,
