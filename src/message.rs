@@ -50,13 +50,19 @@ pub(crate) fn string_builder(event_name: &str, event_time: i64) -> String {
     if time_left.num_days() > 0 {
         let day_string_ending = if time_left.num_days() > 1 { "s" } else { "" };
         time_left_string = format!("{} day{}", time_left.num_days(), day_string_ending);
+
+        time_left_string.push_str(&format!(
+            " and {} hour{}",
+            time_left.num_hours() % 24,
+            if time_left.num_hours() > 1 { "s" } else { "" }
+        ));
     } else if time_left.num_hours() > 0 {
         let hour_string_ending = if time_left.num_hours() > 1 { "s" } else { "" };
         time_left_string = format!("{} hour{}", time_left.num_hours(), hour_string_ending);
 
         time_left_string.push_str(&format!(
             " and {} minute{}",
-            time_left.num_minutes() % 60,
+            time_left.num_minutes() % 60 + 1,
             if time_left.num_minutes() > 1 { "s" } else { "" }
         ));
     } else if time_left.num_minutes() > 0 {
@@ -66,5 +72,5 @@ pub(crate) fn string_builder(event_name: &str, event_time: i64) -> String {
         time_left_string = "0 seconds.".to_string();
     }
 
-    format!("🏎️ \x02{}\x02 begins in {}", event_name, time_left_string)
+    format!("🏎️ \x02{}\x02 begins in {}.", event_name, time_left_string)
 }
