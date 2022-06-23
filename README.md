@@ -1,6 +1,6 @@
 # HamVerBot
 
-[![Build](https://github.com/obviyus/HamVerBot/actions/workflows/build.yml/badge.svg)](https://github.com/obviyus/HamVerBot/actions/workflows/build.yml)
+[![Build and Release](https://github.com/obviyus/HamVerBot/actions/workflows/build.yml/badge.svg)](https://github.com/obviyus/HamVerBot/actions/workflows/build.yml)
 
 #f1's favourite F1 bot running on [Libera.Chat](https://libera.chat/) built using the
 Rust [`irc`](https://crates.io/crates/irc) crate.
