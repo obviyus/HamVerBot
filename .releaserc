@@ -11,8 +11,7 @@
       {
         "assets": [
           {
-            "path": "./target/release/HamVerBot",
-            "label": "HamVerBot"
+            "path": "./target/release/HamVerBot_*"
           }
         ]
       }
