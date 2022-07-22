@@ -1,4 +1,5 @@
 <p align="center">
+    <img src="https://img.shields.io/github/v/release/obviyus/HamVerBot" alt="Version">
   <a href="https://github.com/obviyus/HamVerBot/actions/workflows/build.yml"><img alt="GitHub CI Status" src="https://github.com/obviyus/HamVerBot/actions/workflows/build.yml/badge.svg"></a>
 </p>
 
@@ -17,7 +18,7 @@
 
 - `!next` to reply with time until the next event
 - automatically send a message 5 minutes before the next event starts
-- post results of an event to the channels
+- post results of an event to the  configured channels
 
 ## Getting Started
 
