@@ -1,9 +1,17 @@
-# HamVerBot
+<p align="center">
+  <a href="https://github.com/obviyus/HamVerBot/actions/workflows/build.yml"><img alt="GitHub CI Status" src="https://github.com/obviyus/HamVerBot/actions/workflows/build.yml/badge.svg"></a>
+</p>
 
-[![Build and Release](https://github.com/obviyus/HamVerBot/actions/workflows/build.yml/badge.svg)](https://github.com/obviyus/HamVerBot/actions/workflows/build.yml)
+<p align="center">
+    <img src="https://img.shields.io/github/commit-activity/m/obviyus/HamVerBot" alt="Commit Activity">
+    <img src="https://img.shields.io/tokei/lines/github/obviyus/HamVerBot" alt="Lines of Code" />
+</p>
 
-#f1's favourite F1 bot running on [Libera.Chat](https://libera.chat/) built using the
-Rust [`irc`](https://crates.io/crates/irc) crate.
+<p align="center"><img src="assets/logo.png" width="200px"/></p>
+
+<h2 align="center">🏎️ HamVerBot</h2>
+
+<p align="center">#f1's favourite F1 bot running on <a href="https://libera.chat">Libera.Chat</a> built using the <a href="https://crates.io/crates/irc"><code>irc</code></a> crate.</p>
 
 ## Features
 
@@ -50,3 +58,5 @@ RUST_LOG=info F1_API_KEY='your-api-key' cargo run
 ## Contributing
 
 This repository uses the automated [`semantic-release`](https://github.com/semantic-release/semantic-release) suite of tools to generate version numbers. All commit messages **must** conform to the [Angular Commit Message conventions](https://github.com/angular/angular/blob/master/CONTRIBUTING.md#-commit-message-format).
+
+Thanks for the logo ordos!
