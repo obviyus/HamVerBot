@@ -14,7 +14,7 @@ pub async fn handle_irc_message(
     message: &str,
     target: &String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match message.to_lowercase().as_str() {
+    match message.to_lowercase().as_str().trim() {
         "ping" => {
             client.send_privmsg(target, "pong")?;
         }
