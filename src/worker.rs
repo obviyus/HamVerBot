@@ -32,7 +32,7 @@ pub async fn worker(
 
                 // Mark the event as delivered
                 match database::insert_result(thread_pool.clone(), &path) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(e) => error!("Failed to insert result for {}: {}", path, e),
                 };
             }
@@ -50,10 +50,7 @@ pub async fn worker(
                 for channel in channels.iter() {
                     thread_client.send_privmsg(
                         channel,
-                        message::string_builder(
-                            format!("{}: {}", name, description).as_str(),
-                            start_time,
-                        ),
+                        format!("🏎️ \x02{}: {}\x02 begins in 5 minutes.", name, description),
                     )?;
                 }
             }
