@@ -49,6 +49,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm i -g semantic-release @semantic-release/exec @semantic-release/changelog
-          cargo install semantic-release-rust --version 1.0.0-alpha.8
+          npm i -g semantic-release @semantic-release/changelog @semantic-release/git
           semantic-release
