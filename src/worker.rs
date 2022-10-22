@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::{
     database::{self, Event},
-    fetch, message,
+    fetch,
 };
 
 pub async fn worker(
@@ -23,7 +23,7 @@ pub async fn worker(
                 .unwrap();
 
             if completed && !delivered {
-                let standings = fetch::driver_standings(&path).await.unwrap();
+                let standings = fetch::path_driver_standings(&path).await.unwrap();
 
                 // Send the result to all channels
                 for channel in channels.iter() {
@@ -61,7 +61,7 @@ pub async fn worker(
                     match database::insert_event(
                         thread_pool.clone(),
                         Event {
-                            id: 0,
+                            _id: 0,
                             meeting_name: name,
                             description,
                             start_time,

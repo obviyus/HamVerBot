@@ -1,4 +1,7 @@
-use crate::models::{DriverStanding, Root, SPFeed, SessionInfo, Timetable};
+use crate::models::{
+    CurrentConstructorStandings, CurrentDriverStandings, F1APIDriverStanding, Root, SPFeed,
+    SessionInfo, Timetable,
+};
 use log::{error, info};
 use std::env;
 
@@ -6,7 +9,7 @@ const F1_API_ENDPOINT: &str = "https://api.formula1.com/v1/event-tracker";
 const F1_SESSION_ENDPOINT: &str = "https://livetiming.formula1.com/static";
 
 // Fetch driver standings of the given Path
-pub async fn driver_standings(path: &str) -> Result<String, reqwest::Error> {
+pub async fn path_driver_standings(path: &str) -> Result<String, reqwest::Error> {
     let body = reqwest::get(format!("{}/{}SPFeed.json", F1_SESSION_ENDPOINT, &path))
         .await?
         .text_with_charset("utf-8-sig")
@@ -26,7 +29,7 @@ pub async fn driver_standings(path: &str) -> Result<String, reqwest::Error> {
             let difference = dr.f.4.to_string();
             let position = dr.f.3.to_string();
 
-            DriverStanding {
+            F1APIDriverStanding {
                 position: position.parse::<i8>().unwrap(),
                 driver_name,
                 team_name,
@@ -34,7 +37,7 @@ pub async fn driver_standings(path: &str) -> Result<String, reqwest::Error> {
                 difference,
             }
         })
-        .collect::<Vec<DriverStanding>>();
+        .collect::<Vec<F1APIDriverStanding>>();
 
     standings.sort_by(|a, b| a.position.cmp(&b.position));
 
@@ -117,4 +120,80 @@ pub async fn fetch_events() -> Result<Option<Vec<(String, String, i64)>>, Box<dy
     } else {
         Ok(None)
     }
+}
+
+// Fetch current WDC standings from Ergast
+pub async fn fetch_wdc_standings() -> Result<String, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let body = client
+        .get("https://ergast.com/api/f1/current/driverStandings.json")
+        .send()
+        .await?
+        .text_with_charset("utf-8-sig")
+        .await?;
+
+    let standings: CurrentDriverStandings =
+        serde_json::from_str(body.trim_start_matches('\u{feff}'))?;
+
+    let mut output = format!(
+        "🏆 \x02 FORMULA 1 {} WDC Standings\x02:",
+        standings.mrdata.standings_table.season
+    );
+
+    standings
+        .mrdata
+        .standings_table
+        .standings_lists
+        .first()
+        .unwrap()
+        .driver_standings
+        .iter()
+        .take(10)
+        .for_each(|standing| {
+            output.push_str(&format!(
+                " {}. {} - \x0303[{}]\x03",
+                standing.position, standing.driver.code, standing.points
+            ));
+        });
+
+    Ok(output)
+}
+
+// Fetch the current WCC standings from Ergast
+pub async fn fetch_wcc_standings() -> Result<String, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let body = client
+        .get("https://ergast.com/api/f1/current/constructorStandings.json")
+        .send()
+        .await?
+        .text_with_charset("utf-8-sig")
+        .await?;
+
+    let standings: CurrentConstructorStandings =
+        serde_json::from_str(body.trim_start_matches('\u{feff}'))?;
+
+    let mut output = format!(
+        "🔧 \x02 FORMULA 1 {} WCC Standings\x02:",
+        standings.mrdata.standings_table.season
+    );
+
+    standings
+        .mrdata
+        .standings_table
+        .standings_lists
+        .first()
+        .unwrap()
+        .constructor_standings
+        .iter()
+        .take(10)
+        .for_each(|standing| {
+            output.push_str(&format!(
+                " {}. {} - \x0303[{}]\x03",
+                standing.position, standing.constructor.name, standing.points
+            ));
+        });
+
+    Ok(output)
 }
