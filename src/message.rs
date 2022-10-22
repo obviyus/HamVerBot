@@ -6,7 +6,7 @@ use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 
-use crate::database;
+use crate::{database, fetch};
 
 pub async fn handle_irc_message(
     client: Arc<Client>,
@@ -32,6 +32,30 @@ pub async fn handle_irc_message(
                 target,
                 string_builder(format!("{}: {}", name, description).as_str(), start_time),
             )?;
+        }
+
+        "d" | "drivers" => {
+            let standings: String = match fetch::fetch_wdc_standings().await {
+                Ok(standings) => standings,
+                Err(e) => {
+                    client.send_privmsg(target, "Failed to fetch standings.")?;
+                    return Err(e);
+                }
+            };
+
+            client.send_privmsg(target, standings)?;
+        }
+
+        "c" | "constructors" => {
+            let standings: String = match fetch::fetch_wcc_standings().await {
+                Ok(standings) => standings,
+                Err(e) => {
+                    client.send_privmsg(target, "Failed to fetch standings.")?;
+                    return Err(e);
+                }
+            };
+
+            client.send_privmsg(target, standings)?;
         }
         _ => {}
     }

@@ -91,7 +91,7 @@ pub struct Data {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DriverStanding {
+pub struct F1APIDriverStanding {
     pub position: i8,
     pub driver_name: String,
     pub team_name: String,
@@ -102,7 +102,7 @@ pub struct DriverStanding {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionResults {
     pub title: String,
-    pub standings: Vec<DriverStanding>,
+    pub standings: Vec<F1APIDriverStanding>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -143,4 +143,124 @@ pub struct Timetable {
     pub description: String,
     pub end_time: String,
     pub start_time: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentDriverStandings {
+    #[serde(rename = "MRData")]
+    pub mrdata: DriversMrdata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentConstructorStandings {
+    #[serde(rename = "MRData")]
+    pub mrdata: ConstructorsMrdata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriversMrdata {
+    pub xmlns: String,
+    pub series: String,
+    pub url: String,
+    pub limit: String,
+    pub offset: String,
+    pub total: String,
+    #[serde(rename = "StandingsTable")]
+    pub standings_table: DriverStandingsTable,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConstructorsMrdata {
+    pub xmlns: String,
+    pub series: String,
+    pub url: String,
+    pub limit: String,
+    pub offset: String,
+    pub total: String,
+    #[serde(rename = "StandingsTable")]
+    pub standings_table: ConstructorStandingsTable,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriverStandingsTable {
+    pub season: String,
+    #[serde(rename = "StandingsLists")]
+    pub standings_lists: Vec<DriverStandingsList>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConstructorStandingsTable {
+    pub season: String,
+    #[serde(rename = "StandingsLists")]
+    pub standings_lists: Vec<ConstructorStandingsList>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriverStandingsList {
+    pub season: String,
+    pub round: String,
+    #[serde(rename = "DriverStandings")]
+    pub driver_standings: Vec<ErgastAPIDriverStanding>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConstructorStandingsList {
+    pub season: String,
+    pub round: String,
+    #[serde(rename = "ConstructorStandings")]
+    pub constructor_standings: Vec<ConstructorStanding>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ErgastAPIDriverStanding {
+    pub position: String,
+    pub position_text: String,
+    pub points: String,
+    pub wins: String,
+    #[serde(rename = "Driver")]
+    pub driver: Driver,
+    #[serde(rename = "Constructors")]
+    pub constructors: Vec<Constructor>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Driver {
+    pub driver_id: String,
+    pub permanent_number: String,
+    pub code: String,
+    pub url: String,
+    pub given_name: String,
+    pub family_name: String,
+    pub date_of_birth: String,
+    pub nationality: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Constructor {
+    pub constructor_id: String,
+    pub url: String,
+    pub name: String,
+    pub nationality: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConstructorStanding {
+    pub position: String,
+    pub position_text: String,
+    pub points: String,
+    pub wins: String,
+    #[serde(rename = "Constructor")]
+    pub constructor: Constructor,
 }
