@@ -6,6 +6,7 @@
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     "@semantic-release/changelog",
+    "@semantic-release/git",
     [
       "@semantic-release/github",
       {
@@ -14,13 +15,6 @@
             "path": "./target/release/HamVerBot_*"
           }
         ]
-      }
-    ],
-    [
-      "@semantic-release/exec",
-      {
-        "verifyCmd": "semantic-release-rust verify-conditions",
-        "prepareCmd": "semantic-release-rust prepare ${nextRelease.version}"
       }
     ]
   ]
