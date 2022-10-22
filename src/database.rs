@@ -20,9 +20,8 @@ const RESULTS: &str = "CREATE TABLE IF NOT EXISTS results (
 
 // Event describes a meeting that is scheduled for a certain time. It is
 // a representation of a row in the `events` table.
-#[derive(Debug)]
 pub struct Event {
-    pub(crate) id: i32,
+    pub(crate) _id: i32,
     pub(crate) meeting_name: String,
     pub(crate) description: String,
     pub(crate) start_time: i64,
@@ -31,11 +30,10 @@ pub struct Event {
 // EventResult describes a meeting that has been completed, with a path
 // to access the standings. It is a representation of a row in the `results`
 // table.
-#[derive(Debug)]
 pub struct EventResult {
-    id: i32,
-    path: String,
-    end_time: i64,
+    _id: i32,
+    _path: String,
+    _end_time: i64,
 }
 
 pub async fn new(database_name: String) -> Result<Pool<SqliteConnectionManager>, Error> {
@@ -64,7 +62,7 @@ pub async fn next_event(
 
     let mut rows = stmt.query_map(params![now], |row| {
         Ok(Event {
-            id: row.get(0)?,
+            _id: row.get(0)?,
             meeting_name: row.get(1)?,
             description: row.get(2)?,
             start_time: row.get(3)?,
@@ -73,7 +71,10 @@ pub async fn next_event(
 
     if let Some(event) = rows.next() {
         let event = event?;
-        info!("Next event: {} {} at {}", event.meeting_name, event.description, event.start_time);
+        info!(
+            "Next event: {} {} at {}",
+            event.meeting_name, event.description, event.start_time
+        );
         Ok(Some((
             event.meeting_name,
             event.description,
@@ -94,9 +95,9 @@ pub async fn is_event_delivered(
 
     let mut rows = stmt.query_map(params![path], |row| {
         Ok(EventResult {
-            id: row.get(0)?,
-            path: row.get(1)?,
-            end_time: row.get(2)?,
+            _id: row.get(0)?,
+            _path: row.get(1)?,
+            _end_time: row.get(2)?,
         })
     })?;
 
@@ -121,10 +122,7 @@ pub fn insert_event(pool: Pool<SqliteConnectionManager>, event: Event) -> Result
 }
 
 // Given an EventResult with a path and an end_time, insert the result into the database.
-pub fn insert_result(
-    pool: Pool<SqliteConnectionManager>,
-    path: &str,
-) -> Result<(), Error> {
+pub fn insert_result(pool: Pool<SqliteConnectionManager>, path: &str) -> Result<(), Error> {
     let conn = pool.get().unwrap();
     let mut stmt = conn.prepare("INSERT INTO results (path, end_time) VALUES (?1, ?2)")?;
 
