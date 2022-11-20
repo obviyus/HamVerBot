@@ -19,7 +19,7 @@ pub async fn handle_irc_message(
             client.send_privmsg(target, "pong")?;
         }
 
-        "next" => {
+        "n" | "next" => {
             let (name, description, start_time) = match database::next_event(pool).await? {
                 Some(event) => event,
                 None => {
@@ -32,6 +32,18 @@ pub async fn handle_irc_message(
                 target,
                 string_builder(format!("{}: {}", name, description).as_str(), start_time),
             )?;
+        }
+
+        "p" | "prev" => {
+            let path = match database::previous_result(pool).await? {
+                Some(event) => event,
+                None => {
+                    client.send_privmsg(target, "No previous events found.")?;
+                    return Ok(());
+                }
+            };
+
+            client.send_privmsg(target, fetch::path_driver_standings(&path).await?)?;
         }
 
         "d" | "drivers" => {

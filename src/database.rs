@@ -85,6 +85,27 @@ pub async fn next_event(
     }
 }
 
+// Get the previous result from the database.
+pub async fn previous_result(pool: Pool<SqliteConnectionManager>) -> Result<Option<String>, Error> {
+    let conn = pool.get().unwrap();
+    let mut stmt = conn.prepare("SELECT * FROM results ORDER BY id DESC LIMIT 1")?;
+
+    let mut rows = stmt.query_map(params![], |row| {
+        Ok(EventResult {
+            _id: row.get(0)?,
+            _path: row.get(1)?,
+            _end_time: row.get(2)?,
+        })
+    })?;
+
+    if let Some(event) = rows.next() {
+        let event = event?;
+        Ok(Some(event._path))
+    } else {
+        Ok(None)
+    }
+}
+
 // Given a path, checks if the message has been delivered.
 pub async fn is_event_delivered(
     pool: Pool<SqliteConnectionManager>,
