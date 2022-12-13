@@ -12,13 +12,13 @@ pub struct HamVerBotConfig {
 }
 
 pub fn load_config() -> Result<HamVerBotConfig, ConfigError> {
-    let config_path = std::env::var("CONFIG_PATH").unwrap_or("config.toml".to_string());
+    let config_path = std::env::var("CONFIG_PATH").unwrap_or_else(|_| "config.toml".to_string());
     info!("Loading config from {}", config_path);
 
     let config = match Config::load(config_path.clone()) {
         Ok(config) => config,
         Err(e) => {
-            error!("Error attempting to read {} : {:?}", config_path.clone(), e);
+            error!("Error attempting to read {} : {:?}", config_path, e);
             return Err(ConfigError(e.to_string()));
         }
     };

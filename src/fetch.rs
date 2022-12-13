@@ -101,7 +101,7 @@ pub async fn fetch_events() -> Result<Option<Vec<(String, String, i64)>>, Box<dy
         let mut events: Vec<(String, String, i64)> = Vec::with_capacity(5);
 
         upcoming_sessions.iter().for_each(|timetable| {
-            return match chrono::DateTime::parse_from_str(
+            match chrono::DateTime::parse_from_str(
                 &format!("{} {}", timetable.start_time, timetable.gmt_offset),
                 "%Y-%m-%dT%H:%M:%S %:z",
             ) {
@@ -113,7 +113,7 @@ pub async fn fetch_events() -> Result<Option<Vec<(String, String, i64)>>, Box<dy
                 Err(e) => {
                     error!("Error parsing start_time: {}", e);
                 }
-            };
+            }
         });
 
         Ok(Some(events))
