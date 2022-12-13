@@ -1,3 +1,10 @@
+## [0.6.1](https://github.com/obviyus/HamVerBot/compare/v0.6.0...v0.6.1) (2022-12-13)
+
+
+### Bug Fixes
+
+* **clippy:** apply lint fixes ([56652d7](https://github.com/obviyus/HamVerBot/commit/56652d71205fdaa6a69d57de0b2371ae3684e84b))
+
 # [0.6.0](https://github.com/obviyus/HamVerBot/compare/v0.5.0...v0.6.0) (2022-12-13)
 
 
