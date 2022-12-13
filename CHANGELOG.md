@@ -1,3 +1,10 @@
+# [0.6.0](https://github.com/obviyus/HamVerBot/compare/v0.5.0...v0.6.0) (2022-12-13)
+
+
+### Features
+
+* **dummy:** dummy commit to test CI ([168802d](https://github.com/obviyus/HamVerBot/commit/168802d45a5b0c1cebc302d6e1d4484143ca5f49))
+
 # [0.5.0](https://github.com/obviyus/HamVerBot/compare/v0.4.0...v0.5.0) (2022-11-20)
 
 
