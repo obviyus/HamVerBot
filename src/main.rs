@@ -85,7 +85,7 @@ async fn main() -> irc::error::Result<()> {
                     "{}\x00{}\x00{}",
                     client_clone.clone().current_nickname(),
                     client_clone.clone().current_nickname(),
-                    config.irc.password().to_string()
+                    config.irc.password()
                 ))))?;
                 sender.send(Command::CAP(None, "END".parse().unwrap(), None, None))?;
             }

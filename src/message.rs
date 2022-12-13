@@ -78,9 +78,9 @@ pub async fn handle_irc_message(
 
 // Human readable time until event_time
 pub(crate) fn string_builder(event_name: &str, event_time: i64) -> String {
-    let parsed_time = chrono::Utc.timestamp(event_time, 0);
+    let parsed_time = chrono::Utc.timestamp_opt(event_time, 0);
 
-    let time_left = parsed_time - chrono::Utc::now();
+    let time_left = parsed_time.single().unwrap() - chrono::Utc::now();
     let mut time_left_string: String;
 
     if time_left.num_days() > 0 {
