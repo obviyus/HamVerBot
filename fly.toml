@@ -1,0 +1,18 @@
+# fly.toml file generated for hamverbot on 2023-02-27T17:38:35+05:30
+
+app = "hamverbot"
+kill_signal = "SIGINT"
+kill_timeout = 5
+processes = []
+
+[env]
+
+[experimental]
+auto_rollback = true
+cmd = "./HamVerBot"
+
+[[mounts]]
+source = "hamverbot_data"
+destination = "/app/db"
+
+[[services]]
