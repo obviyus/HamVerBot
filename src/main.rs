@@ -29,7 +29,7 @@ async fn main() -> irc::error::Result<()> {
     let channels = config.channels.clone();
 
     let client_clone = Arc::new(client);
-    let db_pool = database::new(format!("{}.db", config.irc.nickname()?))
+    let db_pool = database::new("./db/HamVerBot.db".to_string())
         .await
         .unwrap();
 
