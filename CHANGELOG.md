@@ -1,3 +1,15 @@
+# [0.7.0](https://github.com/obviyus/HamVerBot/compare/v0.6.1...v0.7.0) (2023-03-04)
+
+
+### Bug Fixes
+
+* **cargo:** remove dependency on openssl ([a46dbb3](https://github.com/obviyus/HamVerBot/commit/a46dbb35d0f1a4db8bb6411829c69946404fa542))
+
+
+### Features
+
+* **docker:** create Dockerfile to deploy to fly.io ([0412c53](https://github.com/obviyus/HamVerBot/commit/0412c53207961e4d008ed4630620a7cf9801b9cd))
+
 ## [0.6.1](https://github.com/obviyus/HamVerBot/compare/v0.6.0...v0.6.1) (2022-12-13)
 
 
