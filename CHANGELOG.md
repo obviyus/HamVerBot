@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/obviyus/HamVerBot/compare/v0.7.0...v0.8.0) (2023-03-07)
+
+
+### Features
+
+* **config:** add fly.io configs ([6e44278](https://github.com/obviyus/HamVerBot/commit/6e442786f290e56a673b626727968aa4d4c81737))
+
 # [0.7.0](https://github.com/obviyus/HamVerBot/compare/v0.6.1...v0.7.0) (2023-03-04)
 
 
