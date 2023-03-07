@@ -33,6 +33,5 @@ WORKDIR /app
 # Get compiled binaries from builder's cargo install directory
 COPY --from=builder /usr/local/cargo/bin/HamVerBot /app/HamVerBot
 
-# Copy the config and DB files (workaround!)
+# Copy the config (workaround!)
 COPY config.toml /app/config.toml
-COPY db/HamVerBot.db /app/db/HamVerBot.db

@@ -11,8 +11,8 @@ processes = []
 auto_rollback = true
 cmd = "./HamVerBot"
 
-[[mounts]]
+[[services]]
+
+[mounts]
 source = "hamverbot_data"
 destination = "/app/db"
-
-[[services]]
