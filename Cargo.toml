@@ -9,7 +9,7 @@ repository = "https://github.com/obviyus/HamVerBot"
 
 [dependencies]
 base64 = "0.21.0"
-chrono = "0.4.23"
+chrono = "0.4.24"
 env_logger = "0.10.0"
 futures = "0.3.26"
 irc = { version = "0.15.0", default-features = false, features = [
