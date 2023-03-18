@@ -34,6 +34,60 @@ pub async fn handle_irc_message(
             )?;
         }
 
+        "wr" | "whenrace" => {
+            let (name, description, start_time) =
+                match database::next_event_by_description(pool, database::Description::GrandPrix)
+                    .await?
+                {
+                    Some(event) => event,
+                    None => {
+                        client.send_privmsg(target, "No upcoming events found.")?;
+                        return Ok(());
+                    }
+                };
+
+            client.send_privmsg(
+                target,
+                string_builder(format!("{}: {}", name, description).as_str(), start_time),
+            )?;
+        }
+
+        "wq" | "whenquali" => {
+            let (name, description, start_time) =
+                match database::next_event_by_description(pool, database::Description::Qualifying)
+                    .await?
+                {
+                    Some(event) => event,
+                    None => {
+                        client.send_privmsg(target, "No upcoming events found.")?;
+                        return Ok(());
+                    }
+                };
+
+            client.send_privmsg(
+                target,
+                string_builder(format!("{}: {}", name, description).as_str(), start_time),
+            )?;
+        }
+
+        "ws" | "whensprint" => {
+            let (name, description, start_time) =
+                match database::next_event_by_description(pool, database::Description::Sprint)
+                    .await?
+                {
+                    Some(event) => event,
+                    None => {
+                        client.send_privmsg(target, "No upcoming events found.")?;
+                        return Ok(());
+                    }
+                };
+
+            client.send_privmsg(
+                target,
+                string_builder(format!("{}: {}", name, description).as_str(), start_time),
+            )?;
+        }
+
         "p" | "prev" => {
             let path = match database::previous_result(pool).await? {
                 Some(event) => event,

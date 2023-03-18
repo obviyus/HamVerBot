@@ -18,6 +18,29 @@ const RESULTS: &str = "CREATE TABLE IF NOT EXISTS results (
     end_time INTEGER NOT NULL
  )";
 
+#[derive(Debug)]
+pub enum Description {
+    GrandPrix,
+    Qualifying,
+    FreePractice1,
+    FreePractice2,
+    FreePractice3,
+    Sprint,
+}
+
+impl Description {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Description::GrandPrix => "Grand Prix",
+            Description::Qualifying => "Qualifying",
+            Description::FreePractice1 => "Free Practice 1",
+            Description::FreePractice2 => "Free Practice 2",
+            Description::FreePractice3 => "Free Practice 3",
+            Description::Sprint => "Sprint",
+        }
+    }
+}
+
 // Event describes a meeting that is scheduled for a certain time. It is
 // a representation of a row in the `events` table.
 pub struct Event {
@@ -61,6 +84,43 @@ pub async fn next_event(
         .as_secs();
 
     let mut rows = stmt.query_map(params![now], |row| {
+        Ok(Event {
+            _id: row.get(0)?,
+            meeting_name: row.get(1)?,
+            description: row.get(2)?,
+            start_time: row.get(3)?,
+        })
+    })?;
+
+    if let Some(event) = rows.next() {
+        let event = event?;
+        info!(
+            "Next event: {} {} at {}",
+            event.meeting_name, event.description, event.start_time
+        );
+        Ok(Some((
+            event.meeting_name,
+            event.description,
+            event.start_time,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
+// Get next event by description
+pub async fn next_event_by_description(
+    pool: Pool<SqliteConnectionManager>,
+    description: Description,
+) -> Result<Option<(String, String, i64)>, Error> {
+    let conn = pool.get().unwrap();
+    let mut stmt = conn.prepare("SELECT * FROM events WHERE description = ?1 AND start_time > ?2 ORDER BY start_time ASC LIMIT 1")?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let mut rows = stmt.query_map(params![description.as_str(), now], |row| {
         Ok(Event {
             _id: row.get(0)?,
             meeting_name: row.get(1)?,
