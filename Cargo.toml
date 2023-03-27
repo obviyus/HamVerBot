@@ -20,7 +20,7 @@ irc = { version = "0.15.0", default-features = false, features = [
 log = "0.4.17"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
-reqwest = { version = "0.11.14", default-features = false, features = [
+reqwest = { version = "0.11.15", default-features = false, features = [
   "blocking",
   "json",
   "rustls-tls",
