@@ -11,7 +11,7 @@ repository = "https://github.com/obviyus/HamVerBot"
 base64 = "0.21.0"
 chrono = "0.4.24"
 env_logger = "0.10.0"
-futures = "0.3.27"
+futures = "0.3.28"
 irc = { version = "0.15.0", default-features = false, features = [
   "ctcp",
   "toml_config",
@@ -20,15 +20,15 @@ irc = { version = "0.15.0", default-features = false, features = [
 log = "0.4.17"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
-reqwest = { version = "0.11.14", default-features = false, features = [
+reqwest = { version = "0.11.17", default-features = false, features = [
   "blocking",
   "json",
   "rustls-tls",
 ] }
 rusqlite = { version = "0.28.0", features = ["bundled"] }
-serde = { version = "1.0.156", features = ["derive"] }
-serde_json = "1.0.94"
-tokio = { version = "1.26.0", features = ["full"] }
+serde = { version = "1.0.163", features = ["derive"] }
+serde_json = "1.0.96"
+tokio = { version = "1.28.1", features = ["full"] }
 
 # Defining bin here to make multi stage docker build work
 [[bin]]
