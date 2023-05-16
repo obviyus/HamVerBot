@@ -162,5 +162,5 @@ pub(crate) fn string_builder(event_name: &str, event_time: i64) -> String {
         time_left_string = "0 seconds.".to_string();
     }
 
-    format!("🏎️ \x02{}\x02 begins in {}.", event_name, time_left_string)
+    format!("\x02{}\x02 begins in {}.", event_name, time_left_string)
 }
