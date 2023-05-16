@@ -1,3 +1,10 @@
+## [0.9.1](https://github.com/obviyus/HamVerBot/compare/v0.9.0...v0.9.1) (2023-05-16)
+
+
+### Bug Fixes
+
+* **event:** remove extra emoji ([7b49ff4](https://github.com/obviyus/HamVerBot/commit/7b49ff43ce0eda2e66efc2bd50803f1dc32fb164))
+
 # [0.9.0](https://github.com/obviyus/HamVerBot/compare/v0.8.0...v0.9.0) (2023-03-18)
 
 
