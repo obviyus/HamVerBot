@@ -206,21 +206,14 @@ async fn fetch_wdc_standings(
 
 // Get current WDC standings
 pub async fn return_wdc_standings(pool: &SqlitePool) -> Result<String, Box<dyn std::error::Error>> {
-    let result = sqlx::query!("SELECT data FROM drivers_standings ORDER BY id DESC LIMIT 1")
+    let row = sqlx::query!("SELECT data FROM drivers_standings ORDER BY id DESC LIMIT 1")
         .fetch_optional(pool)
         .await?;
 
-    let standings: CurrentDriverStandings;
-
-    match result {
-        Some(_) => {
-            let previous_result = result.unwrap().data;
-            standings = serde_json::from_str(&previous_result).unwrap();
-        }
-        None => {
-            standings = fetch_wdc_standings(pool).await?;
-        }
-    }
+    let standings: CurrentDriverStandings = match row {
+        Some(row) => serde_json::from_str(&row.data).unwrap(),
+        None => fetch_wdc_standings(pool).await?,
+    };
 
     let mut output = format!(
         "🏆 \x02 FORMULA 1 {} WDC Standings\x02:",
@@ -277,21 +270,14 @@ async fn fetch_wcc_standings(
 
 // Get the current WCC standings
 pub async fn return_wcc_standings(pool: &SqlitePool) -> Result<String, Box<dyn std::error::Error>> {
-    let result = sqlx::query!("SELECT data FROM constructors_standings ORDER BY id DESC LIMIT 1")
+    let row = sqlx::query!("SELECT data FROM constructors_standings ORDER BY id DESC LIMIT 1")
         .fetch_optional(pool)
         .await?;
 
-    let standings: CurrentConstructorStandings;
-
-    match result {
-        Some(_) => {
-            let previous_result = result.unwrap().data;
-            standings = serde_json::from_str(&previous_result).unwrap();
-        }
-        None => {
-            standings = fetch_wcc_standings(pool).await?;
-        }
-    }
+    let standings: CurrentConstructorStandings = match row {
+        Some(row) => serde_json::from_str(&row.data).unwrap(),
+        None => fetch_wcc_standings(pool).await?,
+    };
 
     let mut output = format!(
         "🔧 \x02 FORMULA 1 {} WCC Standings\x02:",

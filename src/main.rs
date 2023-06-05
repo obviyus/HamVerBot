@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bot_config = match irc::load_config().await {
         Ok(config) => config,
         Err(err) => {
-            return Err(err.into());
+            return Err(err);
         }
     };
 

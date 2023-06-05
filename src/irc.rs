@@ -71,7 +71,7 @@ pub async fn broadcast(
         .fetch_all(pool)
         .await?
         .iter()
-        .for_each(|channel| sender.send_privmsg(&channel.name, &message).unwrap());
+        .for_each(|channel| sender.send_privmsg(&channel.name, message).unwrap());
 
     Ok(())
 }
