@@ -13,15 +13,15 @@ pub enum EventType {
 }
 
 impl EventType {
-    fn from_str(s: &str) -> Option<EventType> {
+    pub fn from_str(s: &str) -> Option<EventType> {
         match s {
-            "Livery Reveal" => Some(EventType::LiveryReveal),
-            "Practice 1" => Some(EventType::FreePractice1),
-            "Practice 2" => Some(EventType::FreePractice2),
-            "Practice 3" => Some(EventType::FreePractice3),
-            "Qualifying" => Some(EventType::Qualifying),
-            "Sprint" => Some(EventType::Sprint),
-            "Race" => Some(EventType::Race),
+            "livery reveal" | "l" | "livery" => Some(EventType::LiveryReveal),
+            "practice 1" | "p1" => Some(EventType::FreePractice1),
+            "practice 2" | "p2" => Some(EventType::FreePractice2),
+            "practice 3" | "p3" => Some(EventType::FreePractice3),
+            "qualifying" | "quali" | "q" => Some(EventType::Qualifying),
+            "sprint" | "s" => Some(EventType::Sprint),
+            "race" | "r" | "gp" => Some(EventType::Race),
             _ => None,
         }
     }

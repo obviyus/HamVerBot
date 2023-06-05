@@ -14,125 +14,100 @@ pub async fn handle_irc_message(
     message: &str,
     target: &String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match message.to_lowercase().as_str().trim() {
-        "ping" => {
-            sender.send_privmsg(target, "pong")?;
-        }
+    let message = message.to_lowercase();
+    let args = message.split_whitespace().collect::<Vec<&str>>();
 
-        "n" | "next" => {
-            let (meeting_name, event_type, start_time) =
-                match database::next_event_filtered(pool, None).await? {
-                    Some(event) => event,
+    let mut commands = args.iter();
+
+    if let Some(command) = commands.next() {
+        match *command {
+            "ping" => {
+                sender.send_privmsg(target, "pong")?;
+            }
+            "n" | "next" => {
+                let (meeting_name, event_type, start_time) =
+                    match database::next_event_filtered(pool, None).await? {
+                        Some(event) => event,
+                        None => {
+                            sender.send_privmsg(target, "No upcoming events found.")?;
+                            return Ok(());
+                        }
+                    };
+
+                sender.send_privmsg(
+                    target,
+                    string_builder(
+                        format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
+                        start_time,
+                    ),
+                )?;
+            }
+
+            "w" | "when" => {
+                let event_type = match commands.next() {
+                    Some(event) => EventType::from_str(event),
                     None => {
                         sender.send_privmsg(target, "No upcoming events found.")?;
                         return Ok(());
                     }
                 };
 
-            sender.send_privmsg(
-                target,
-                string_builder(
-                    format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
-                    start_time,
-                ),
-            )?;
-        }
+                let (meeting_name, event_type, start_time) =
+                    match database::next_event_filtered(pool, event_type).await? {
+                        Some(event) => event,
+                        None => {
+                            sender.send_privmsg(target, "No upcoming events found.")?;
+                            return Ok(());
+                        }
+                    };
 
-        "wr" | "whenrace" => {
-            let (meeting_name, event_type, start_time) =
-                match database::next_event_filtered(pool, Some(EventType::Race)).await? {
+                sender.send_privmsg(
+                    target,
+                    string_builder(
+                        format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
+                        start_time,
+                    ),
+                )?;
+            }
+
+            "p" | "prev" => {
+                let path = match database::get_latest_path(pool).await? {
                     Some(event) => event,
                     None => {
-                        sender.send_privmsg(target, "No upcoming events found.")?;
+                        sender.send_privmsg(target, "No previous events found.")?;
                         return Ok(());
                     }
                 };
 
-            sender.send_privmsg(
-                target,
-                string_builder(
-                    format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
-                    start_time,
-                ),
-            )?;
-        }
+                sender.send_privmsg(target, fetch::fetch_results(pool, &path).await?)?;
+            }
 
-        "wq" | "whenquali" => {
-            let (meeting_name, event_type, start_time) =
-                match database::next_event_filtered(pool, Some(EventType::Qualifying)).await? {
-                    Some(event) => event,
-                    None => {
-                        sender.send_privmsg(target, "No upcoming events found.")?;
-                        return Ok(());
+            "d" | "drivers" => {
+                let standings: String = match fetch::return_wdc_standings(pool).await {
+                    Ok(standings) => standings,
+                    Err(e) => {
+                        sender.send_privmsg(target, "Failed to fetch standings.")?;
+                        return Err(e);
                     }
                 };
 
-            sender.send_privmsg(
-                target,
-                string_builder(
-                    format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
-                    start_time,
-                ),
-            )?;
-        }
+                sender.send_privmsg(target, standings)?;
+            }
 
-        "ws" | "whensprint" => {
-            let (meeting_name, event_type, start_time) =
-                match database::next_event_filtered(pool, Some(EventType::Sprint)).await? {
-                    Some(event) => event,
-                    None => {
-                        sender.send_privmsg(target, "No upcoming events found.")?;
-                        return Ok(());
+            "c" | "constructors" => {
+                let standings: String = match fetch::return_wcc_standings(pool).await {
+                    Ok(standings) => standings,
+                    Err(e) => {
+                        sender.send_privmsg(target, "Failed to fetch standings.")?;
+                        return Err(e);
                     }
                 };
 
-            sender.send_privmsg(
-                target,
-                string_builder(
-                    format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
-                    start_time,
-                ),
-            )?;
+                sender.send_privmsg(target, standings)?;
+            }
+            _ => {}
         }
-
-        "p" | "prev" => {
-            let path = match database::get_latest_path(pool).await? {
-                Some(event) => event,
-                None => {
-                    sender.send_privmsg(target, "No previous events found.")?;
-                    return Ok(());
-                }
-            };
-
-            sender.send_privmsg(target, fetch::fetch_results(pool, &path).await?)?;
-        }
-
-        "d" | "drivers" => {
-            let standings: String = match fetch::return_wdc_standings(pool).await {
-                Ok(standings) => standings,
-                Err(e) => {
-                    sender.send_privmsg(target, "Failed to fetch standings.")?;
-                    return Err(e);
-                }
-            };
-
-            sender.send_privmsg(target, standings)?;
-        }
-
-        "c" | "constructors" => {
-            let standings: String = match fetch::return_wcc_standings(pool).await {
-                Ok(standings) => standings,
-                Err(e) => {
-                    sender.send_privmsg(target, "Failed to fetch standings.")?;
-                    return Err(e);
-                }
-            };
-
-            sender.send_privmsg(target, standings)?;
-        }
-        _ => {}
     }
-
     trace!("{}", message);
     Ok(())
 }
