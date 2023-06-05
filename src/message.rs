@@ -1,127 +1,134 @@
-use std::sync::Arc;
-
 use chrono::TimeZone;
-use irc::client::Client;
+use irc::client::Sender;
 use log::trace;
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
+use sqlx::SqlitePool;
 
-use crate::{database, fetch};
+use crate::{
+    database::{self, EventType},
+    fetch,
+};
 
 pub async fn handle_irc_message(
-    client: Arc<Client>,
-    pool: Pool<SqliteConnectionManager>,
+    sender: &Sender,
+    pool: &SqlitePool,
     message: &str,
     target: &String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match message.to_lowercase().as_str().trim() {
         "ping" => {
-            client.send_privmsg(target, "pong")?;
+            sender.send_privmsg(target, "pong")?;
         }
 
         "n" | "next" => {
-            let (name, description, start_time) = match database::next_event(pool).await? {
-                Some(event) => event,
-                None => {
-                    client.send_privmsg(target, "No upcoming events found.")?;
-                    return Ok(());
-                }
-            };
+            let (meeting_name, event_type, start_time) =
+                match database::next_event_filtered(pool, None).await? {
+                    Some(event) => event,
+                    None => {
+                        sender.send_privmsg(target, "No upcoming events found.")?;
+                        return Ok(());
+                    }
+                };
 
-            client.send_privmsg(
+            sender.send_privmsg(
                 target,
-                string_builder(format!("{}: {}", name, description).as_str(), start_time),
+                string_builder(
+                    format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
+                    start_time,
+                ),
             )?;
         }
 
         "wr" | "whenrace" => {
-            let (name, description, start_time) =
-                match database::next_event_by_description(pool, database::Description::GrandPrix)
-                    .await?
-                {
+            let (meeting_name, event_type, start_time) =
+                match database::next_event_filtered(pool, Some(EventType::Race)).await? {
                     Some(event) => event,
                     None => {
-                        client.send_privmsg(target, "No upcoming events found.")?;
+                        sender.send_privmsg(target, "No upcoming events found.")?;
                         return Ok(());
                     }
                 };
 
-            client.send_privmsg(
+            sender.send_privmsg(
                 target,
-                string_builder(format!("{}: {}", name, description).as_str(), start_time),
+                string_builder(
+                    format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
+                    start_time,
+                ),
             )?;
         }
 
         "wq" | "whenquali" => {
-            let (name, description, start_time) =
-                match database::next_event_by_description(pool, database::Description::Qualifying)
-                    .await?
-                {
+            let (meeting_name, event_type, start_time) =
+                match database::next_event_filtered(pool, Some(EventType::Qualifying)).await? {
                     Some(event) => event,
                     None => {
-                        client.send_privmsg(target, "No upcoming events found.")?;
+                        sender.send_privmsg(target, "No upcoming events found.")?;
                         return Ok(());
                     }
                 };
 
-            client.send_privmsg(
+            sender.send_privmsg(
                 target,
-                string_builder(format!("{}: {}", name, description).as_str(), start_time),
+                string_builder(
+                    format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
+                    start_time,
+                ),
             )?;
         }
 
         "ws" | "whensprint" => {
-            let (name, description, start_time) =
-                match database::next_event_by_description(pool, database::Description::Sprint)
-                    .await?
-                {
+            let (meeting_name, event_type, start_time) =
+                match database::next_event_filtered(pool, Some(EventType::Sprint)).await? {
                     Some(event) => event,
                     None => {
-                        client.send_privmsg(target, "No upcoming events found.")?;
+                        sender.send_privmsg(target, "No upcoming events found.")?;
                         return Ok(());
                     }
                 };
 
-            client.send_privmsg(
+            sender.send_privmsg(
                 target,
-                string_builder(format!("{}: {}", name, description).as_str(), start_time),
+                string_builder(
+                    format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
+                    start_time,
+                ),
             )?;
         }
 
         "p" | "prev" => {
-            let path = match database::previous_result(pool).await? {
+            let path = match database::get_latest_path(pool).await? {
                 Some(event) => event,
                 None => {
-                    client.send_privmsg(target, "No previous events found.")?;
+                    sender.send_privmsg(target, "No previous events found.")?;
                     return Ok(());
                 }
             };
 
-            client.send_privmsg(target, fetch::path_driver_standings(&path).await?)?;
+            sender.send_privmsg(target, fetch::fetch_results(pool, &path).await?)?;
         }
 
         "d" | "drivers" => {
-            let standings: String = match fetch::fetch_wdc_standings().await {
+            let standings: String = match fetch::return_wdc_standings(pool).await {
                 Ok(standings) => standings,
                 Err(e) => {
-                    client.send_privmsg(target, "Failed to fetch standings.")?;
+                    sender.send_privmsg(target, "Failed to fetch standings.")?;
                     return Err(e);
                 }
             };
 
-            client.send_privmsg(target, standings)?;
+            sender.send_privmsg(target, standings)?;
         }
 
         "c" | "constructors" => {
-            let standings: String = match fetch::fetch_wcc_standings().await {
+            let standings: String = match fetch::return_wcc_standings(pool).await {
                 Ok(standings) => standings,
                 Err(e) => {
-                    client.send_privmsg(target, "Failed to fetch standings.")?;
+                    sender.send_privmsg(target, "Failed to fetch standings.")?;
                     return Err(e);
                 }
             };
 
-            client.send_privmsg(target, standings)?;
+            sender.send_privmsg(target, standings)?;
         }
         _ => {}
     }
@@ -131,7 +138,7 @@ pub async fn handle_irc_message(
 }
 
 // Human readable time until event_time
-pub(crate) fn string_builder(event_name: &str, event_time: i64) -> String {
+fn string_builder(event_name: &str, event_time: i64) -> String {
     let parsed_time = chrono::Utc.timestamp_opt(event_time, 0);
 
     let time_left = parsed_time.single().unwrap() - chrono::Utc::now();
