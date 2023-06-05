@@ -16,3 +16,6 @@ vendor/
 
 # Data
 *.db
+
+# Project specific
+config.toml
