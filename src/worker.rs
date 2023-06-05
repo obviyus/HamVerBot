@@ -23,9 +23,7 @@ pub async fn result_worker(
 
             Ok(())
         }
-        Err(e) => {
-            return Err(e.into());
-        }
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -43,8 +41,6 @@ pub async fn alert_worker(
 
             Ok(())
         }
-        Err(e) => {
-            return Err(format!("Error: {}", e).into());
-        }
+        Err(e) => Err(format!("Error: {}", e).into()),
     }
 }
