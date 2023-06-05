@@ -6,7 +6,10 @@ use ::irc::client::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 use log::{error, info};
 use sqlx::SqlitePool;
+use tokio::sync::mpsc;
 use tokio_cron_scheduler::{Job, JobScheduler};
+
+use crate::worker::JobType;
 
 mod database;
 mod fetch;
@@ -43,29 +46,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Job scheduler for workers
     let scheduler = JobScheduler::new().await?;
 
-    // Clone the pool and sender variables
-    let pool_clone = Arc::new(pool.clone());
-    let sender_clone = sender.clone();
+    let (tx, mut rx) = mpsc::channel::<JobType>(2);
 
-    info!("Starting workers...");
-
+    info!("Scheduling workers...");
     scheduler
         .add(Job::new_async("0 1/5 * * * *", move |_, _| {
-            let pool_clone = pool_clone.clone();
-            let sender_clone = sender_clone.clone();
+            let tx = tx.clone();
 
             Box::pin(async move {
-                match worker::result_worker(&pool_clone, &sender_clone).await {
+                match tx.send(JobType::Result).await {
                     Ok(_) => {}
-                    Err(e) => {
-                        error!("Failed to handle result: {:?}", e);
+                    Err(_) => {
+                        error!("Failed to send JobType::Result");
                     }
                 };
-
-                match worker::alert_worker(&pool_clone, &sender_clone).await {
+                match tx.send(JobType::Alert).await {
                     Ok(_) => {}
-                    Err(e) => {
-                        error!("Failed to handle alert: {:?}", e);
+                    Err(_) => {
+                        error!("Failed to send JobType::Alert");
                     }
                 };
             })
@@ -73,6 +71,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     scheduler.start().await?;
+
+    // Clone the pool and sender variables
+    let pool_clone = Arc::new(pool.clone());
+    let sender_clone = sender.clone();
+
+    tokio::spawn(async move {
+        loop {
+            while let Some(message) = rx.recv().await {
+                match message {
+                    JobType::Result => {
+                        match worker::result_worker(&pool_clone, &sender_clone).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("Failed to handle result: {:?}", e);
+                            }
+                        };
+                    }
+                    JobType::Alert => {
+                        match worker::alert_worker(&pool_clone, &sender_clone).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("Failed to handle alert: {:?}", e);
+                            }
+                        };
+                    }
+                }
+            }
+        }
+    });
 
     while let Some(message) = stream.next().await.transpose()? {
         // info!("Received message: {:?}", message.command);

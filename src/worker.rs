@@ -5,6 +5,11 @@ use sqlx::SqlitePool;
 
 use crate::{database::is_event_delivered, fetch, irc::broadcast};
 
+pub enum JobType {
+    Result,
+    Alert,
+}
+
 // Check if a new result is posted on th F1 API
 // If so, fetch the results and broadcast them to channels
 pub async fn result_worker(
