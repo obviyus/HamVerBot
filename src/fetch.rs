@@ -175,7 +175,7 @@ pub async fn read_current_event() -> Result<(String, bool), reqwest::Error> {
     Ok((session.path, session.archive_status.status == "Complete"))
 }
 
-async fn fetch_wdc_standings(
+pub async fn fetch_wdc_standings(
     pool: &SqlitePool,
 ) -> Result<CurrentDriverStandings, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
@@ -195,7 +195,8 @@ async fn fetch_wdc_standings(
     let json_standings = serde_json::to_string(&standings)?;
 
     sqlx::query!(
-        "INSERT INTO drivers_standings (data) VALUES (?)",
+        "INSERT INTO championship_standings (data, type) VALUES (?, 0) ON CONFLICT (type) DO UPDATE SET data = ?, create_time = CURRENT_TIMESTAMP",
+        json_standings,
         json_standings
     )
     .execute(pool)
@@ -206,7 +207,7 @@ async fn fetch_wdc_standings(
 
 // Get current WDC standings
 pub async fn return_wdc_standings(pool: &SqlitePool) -> Result<String, Box<dyn std::error::Error>> {
-    let row = sqlx::query!("SELECT data FROM drivers_standings ORDER BY id DESC LIMIT 1")
+    let row = sqlx::query!("SELECT data FROM championship_standings WHERE type = 0 LIMIT 1",)
         .fetch_optional(pool)
         .await?;
 
@@ -239,7 +240,7 @@ pub async fn return_wdc_standings(pool: &SqlitePool) -> Result<String, Box<dyn s
     Ok(output)
 }
 
-async fn fetch_wcc_standings(
+pub async fn fetch_wcc_standings(
     pool: &SqlitePool,
 ) -> Result<CurrentConstructorStandings, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
@@ -259,8 +260,9 @@ async fn fetch_wcc_standings(
     let json_standings = serde_json::to_string(&standings)?;
 
     sqlx::query!(
-        "INSERT INTO constructors_standings (data) VALUES (?)",
-        json_standings
+        "INSERT INTO championship_standings (data, type) VALUES (?, 1) ON CONFLICT (type) DO UPDATE SET data = ?, create_time = CURRENT_TIMESTAMP",
+        json_standings,
+        json_standings,
     )
     .execute(pool)
     .await?;
@@ -270,7 +272,7 @@ async fn fetch_wcc_standings(
 
 // Get the current WCC standings
 pub async fn return_wcc_standings(pool: &SqlitePool) -> Result<String, Box<dyn std::error::Error>> {
-    let row = sqlx::query!("SELECT data FROM constructors_standings ORDER BY id DESC LIMIT 1")
+    let row = sqlx::query!("SELECT data FROM championship_standings WHERE type = 1 LIMIT 1")
         .fetch_optional(pool)
         .await?;
 
