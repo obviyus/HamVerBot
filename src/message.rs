@@ -71,15 +71,15 @@ pub async fn handle_irc_message(
             }
 
             "p" | "prev" => {
-                let path = match database::get_latest_path(pool).await? {
-                    Some(event) => event,
+                match database::get_latest_path(pool).await? {
+                    Some(path) => {
+                        sender.send_privmsg(target, fetch::fetch_results(pool, &path).await?)?;
+                    }
                     None => {
                         sender.send_privmsg(target, "No previous events found.")?;
                         return Ok(());
                     }
                 };
-
-                sender.send_privmsg(target, fetch::fetch_results(pool, &path).await?)?;
             }
 
             "d" | "drivers" => {
