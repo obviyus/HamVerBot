@@ -5,9 +5,12 @@ use sqlx::SqlitePool;
 
 use crate::{database::is_event_delivered, fetch, irc::broadcast};
 
+#[derive(Debug)]
 pub enum JobType {
     Result,
     Alert,
+    Wcc,
+    Wdc,
 }
 
 // Check if a new result is posted on th F1 API

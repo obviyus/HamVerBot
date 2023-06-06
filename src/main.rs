@@ -54,18 +54,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let tx = tx.clone();
 
             Box::pin(async move {
-                match tx.send(JobType::Result).await {
-                    Ok(_) => {}
-                    Err(_) => {
-                        error!("Failed to send JobType::Result");
-                    }
-                };
-                match tx.send(JobType::Alert).await {
-                    Ok(_) => {}
-                    Err(_) => {
-                        error!("Failed to send JobType::Alert");
-                    }
-                };
+                tx.send(JobType::Result).await.unwrap();
+                tx.send(JobType::Alert).await.unwrap();
+                tx.send(JobType::Wdc).await.unwrap();
+                tx.send(JobType::Wcc).await.unwrap();
             })
         })?)
         .await?;
@@ -93,6 +85,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             Ok(_) => {}
                             Err(e) => {
                                 error!("Failed to handle alert: {:?}", e);
+                            }
+                        };
+                    }
+                    JobType::Wdc => {
+                        match fetch::fetch_wdc_standings(&pool_clone).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("Failed to handle WDC: {:?}", e);
+                            }
+                        };
+                    }
+                    JobType::Wcc => {
+                        match fetch::fetch_wcc_standings(&pool_clone).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("Failed to handle WCC: {:?}", e);
                             }
                         };
                     }
