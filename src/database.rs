@@ -127,10 +127,7 @@ pub async fn get_latest_path(
         .await?;
 
     match row {
-        Some(path) => {
-            let data = fetch_results(pool, &path.path).await?;
-            Ok(Some(data))
-        }
+        Some(record) => Ok(Some(record.path)),
         None => Ok(None),
     }
 }
