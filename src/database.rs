@@ -1,7 +1,5 @@
 use sqlx::SqlitePool;
 
-use crate::fetch::fetch_results;
-
 pub enum EventType {
     LiveryReveal = 1,
     FreePractice1 = 2,
