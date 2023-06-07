@@ -35,6 +35,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
+    // Run migrations
+    sqlx::migrate!().run(&pool).await?;
+
     let mut irc_client = Client::from_config(bot_config.irc).await?;
 
     let mut stream = irc_client.stream()?;
