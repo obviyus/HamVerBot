@@ -1,76 +1,120 @@
-mod authenticate;
-mod config;
+use std::{env, sync::Arc};
+
+use ::futures::prelude::*;
+use ::irc::client::prelude::*;
+
+use base64::{engine::general_purpose, Engine as _};
+use log::{error, info};
+use sqlx::SqlitePool;
+use tokio::sync::mpsc;
+use tokio_cron_scheduler::{Job, JobScheduler};
+
+use crate::worker::JobType;
+
 mod database;
 mod fetch;
+mod irc;
 mod message;
 mod models;
 mod worker;
-use crate::authenticate::authenticate;
-use chrono::{Timelike, Utc};
-use futures::StreamExt;
-use irc::client::prelude::*;
-use log::{error, info};
-use std::{process::exit, sync::Arc, time::Duration};
 
 #[tokio::main]
-async fn main() -> irc::error::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let config = match config::load_config() {
+    // Configuration before startup
+    let bot_config = match irc::load_config().await {
         Ok(config) => config,
-        Err(_e) => {
-            exit(1);
+        Err(err) => {
+            return Err(err);
         }
     };
 
-    let mut client = Client::from_config(config.irc.clone()).await?;
-    let mut stream = client.stream()?;
-    let sender = client.sender();
-    let channels = config.channels.clone();
+    let pool = SqlitePool::connect(
+        &(env::var("DATABASE_URL").unwrap_or("sqlite:HamVerBot.db".to_string())),
+    )
+    .await?;
 
-    let client_clone = Arc::new(client);
-    let db_pool = database::new("./db/HamVerBot.db".to_string())
-        .await
-        .unwrap();
+    // Run migrations
+    sqlx::migrate!().run(&pool).await?;
+
+    let mut irc_client = Client::from_config(bot_config.irc).await?;
+
+    let mut stream = irc_client.stream()?;
+    let sender = irc_client.sender();
 
     // Perform SASL authentication
-    match authenticate(&config.irc, client_clone.clone()) {
-        Ok(_) => {
-            info!("Authenticated successfully");
-        }
-        Err(e) => {
-            error!("Failed to authenticate: {:?}", e);
-            exit(1);
-        }
-    }
+    irc::authenticate(&bot_config.nickname, &bot_config.password, &irc_client)?;
 
-    // Thread to run background tasks every 5 minutes
-    let thread_pool = db_pool.clone();
-    let thread_client = client_clone.clone();
+    // Job scheduler for workers
+    let scheduler = JobScheduler::new().await?;
+
+    let (tx, mut rx) = mpsc::channel::<JobType>(2);
+
+    info!("Scheduling workers...");
+    scheduler
+        .add(Job::new_async("0 1/5 * * * *", move |_, _| {
+            let tx = tx.clone();
+
+            Box::pin(async move {
+                tx.send(JobType::Result).await.unwrap();
+                tx.send(JobType::Alert).await.unwrap();
+                tx.send(JobType::Wdc).await.unwrap();
+                tx.send(JobType::Wcc).await.unwrap();
+            })
+        })?)
+        .await?;
+
+    scheduler.start().await?;
+
+    // Clone the pool and sender variables
+    let pool_clone = Arc::new(pool.clone());
+    let sender_clone = sender.clone();
+
     tokio::spawn(async move {
-        // Sleep until the start of the next 5th minute
-        let time_to_sleep = (5 - (Utc::now().minute()) % 5) * 60 + (60 - Utc::now().second()) - 60;
-        info!("Sleeping worker threads for {} seconds.", time_to_sleep);
-
-        tokio::time::sleep(Duration::from_secs(time_to_sleep.into())).await;
-
-        // Perform checks every 5 minutes
-        let mut interval = tokio::time::interval(Duration::from_secs(300));
-
         loop {
-            interval.tick().await;
-            match worker::worker(thread_pool.clone(), thread_client.clone(), channels.clone()).await
-            {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("Failed to run worker: {:?}", e);
+            while let Some(message) = rx.recv().await {
+                match message {
+                    JobType::Result => {
+                        match worker::result_worker(&pool_clone, &sender_clone).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("Failed to handle result: {:?}", e);
+                            }
+                        };
+                    }
+                    JobType::Alert => {
+                        match worker::alert_worker(&pool_clone, &sender_clone).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("Failed to handle alert: {:?}", e);
+                            }
+                        };
+                    }
+                    JobType::Wdc => {
+                        match fetch::fetch_wdc_standings(&pool_clone).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("Failed to handle WDC: {:?}", e);
+                            }
+                        };
+                    }
+                    JobType::Wcc => {
+                        match fetch::fetch_wcc_standings(&pool_clone).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("Failed to handle WCC: {:?}", e);
+                            }
+                        };
+                    }
                 }
-            };
+            }
         }
     });
 
     while let Some(message) = stream.next().await.transpose()? {
-        info!("Received message: {:?}", message.command);
+        // info!("Received message: {:?}", message.command);
+
         match message.command {
             Command::CAP(_, ref subcommand, _, _) => {
                 if subcommand.to_str() == "ACK" {
@@ -81,12 +125,12 @@ async fn main() -> irc::error::Result<()> {
 
             Command::AUTHENTICATE(_) => {
                 info!("Got signal to continue authenticating");
-                sender.send(Command::AUTHENTICATE(base64::encode(format!(
-                    "{}\x00{}\x00{}",
-                    client_clone.clone().current_nickname(),
-                    client_clone.clone().current_nickname(),
-                    config.irc.password()
-                ))))?;
+                sender.send(Command::AUTHENTICATE(general_purpose::STANDARD.encode(
+                    format!(
+                        "{}\x00{}\x00{}",
+                        bot_config.nickname, bot_config.nickname, bot_config.password
+                    ),
+                )))?;
                 sender.send(Command::CAP(None, "END".parse().unwrap(), None, None))?;
             }
 
@@ -97,21 +141,14 @@ async fn main() -> irc::error::Result<()> {
                 }
             }
 
-            Command::INVITE(ref _target, ref msg) => {
-                sender.send_join(msg)?;
+            Command::INVITE(ref _target, ref channel) => {
+                irc::join_channel(channel, &pool, &sender).await?;
             }
 
             Command::PRIVMSG(ref target, ref msg) => {
-                if msg.starts_with(&config.command_prefix) {
-                    let command = &msg[config.command_prefix.len()..];
-                    match message::handle_irc_message(
-                        client_clone.clone(),
-                        db_pool.clone(),
-                        command,
-                        target,
-                    )
-                    .await
-                    {
+                if msg.starts_with(&bot_config.command_prefix) {
+                    let command = &msg[bot_config.command_prefix.len()..];
+                    match message::handle_irc_message(&sender, &pool, command, target).await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("Failed to handle message: {:?}", e);
@@ -119,13 +156,10 @@ async fn main() -> irc::error::Result<()> {
                     };
                 }
             }
-
             _ => {}
         }
-        // trace!("{}", message);
     }
 
-    info!("Connection to IRC server has been closed");
-
+    info!("Connection to IRC server has been closed. Shutting down...");
     Ok(())
 }
