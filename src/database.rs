@@ -1,214 +1,131 @@
-use r2d2::Pool;
-extern crate r2d2;
-extern crate r2d2_sqlite;
-use log::info;
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, Error};
+use sqlx::SqlitePool;
 
-const EVENTS: &str = "CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY,
-    meeting_name TEXT NOT NULL,
-    description TEXT NOT NULL,
-    start_time INTEGER NOT NULL
- )";
-
-const RESULTS: &str = "CREATE TABLE IF NOT EXISTS results (
-    id INTEGER PRIMARY KEY,
-    path TEXT NOT NULL UNIQUE,
-    end_time INTEGER NOT NULL
- )";
-
-#[derive(Debug)]
-pub enum Description {
-    GrandPrix,
-    Qualifying,
-    FreePractice1,
-    FreePractice2,
-    FreePractice3,
-    Sprint,
+pub enum EventType {
+    LiveryReveal = 1,
+    FreePractice1 = 2,
+    FreePractice2 = 3,
+    FreePractice3 = 4,
+    Qualifying = 5,
+    Sprint = 6,
+    Race = 7,
 }
 
-impl Description {
-    fn as_str(&self) -> &'static str {
+impl EventType {
+    pub fn from_str(s: &str) -> Option<EventType> {
+        match s {
+            "livery reveal" | "l" | "livery" => Some(EventType::LiveryReveal),
+            "practice 1" | "p1" => Some(EventType::FreePractice1),
+            "practice 2" | "p2" => Some(EventType::FreePractice2),
+            "practice 3" | "p3" => Some(EventType::FreePractice3),
+            "qualifying" | "quali" | "q" => Some(EventType::Qualifying),
+            "sprint" | "s" => Some(EventType::Sprint),
+            "race" | "r" | "gp" => Some(EventType::Race),
+            _ => None,
+        }
+    }
+
+    pub fn to_str(&self) -> &str {
         match self {
-            Description::GrandPrix => "Grand Prix",
-            Description::Qualifying => "Qualifying",
-            Description::FreePractice1 => "Free Practice 1",
-            Description::FreePractice2 => "Free Practice 2",
-            Description::FreePractice3 => "Free Practice 3",
-            Description::Sprint => "Sprint",
+            EventType::LiveryReveal => "Livery Reveal",
+            EventType::FreePractice1 => "Practice 1",
+            EventType::FreePractice2 => "Practice 2",
+            EventType::FreePractice3 => "Practice 3",
+            EventType::Qualifying => "Qualifying",
+            EventType::Sprint => "Sprint",
+            EventType::Race => "Race",
+        }
+    }
+
+    fn from_i64(value: i64) -> EventType {
+        match value {
+            1 => EventType::LiveryReveal,
+            2 => EventType::FreePractice1,
+            3 => EventType::FreePractice2,
+            4 => EventType::FreePractice3,
+            5 => EventType::Qualifying,
+            6 => EventType::Sprint,
+            7 => EventType::Race,
+            _ => panic!("Invalid event type"),
         }
     }
 }
 
-// Event describes a meeting that is scheduled for a certain time. It is
-// a representation of a row in the `events` table.
-pub struct Event {
-    pub(crate) _id: i32,
-    pub(crate) meeting_name: String,
-    pub(crate) description: String,
-    pub(crate) start_time: i64,
-}
-
-// EventResult describes a meeting that has been completed, with a path
-// to access the standings. It is a representation of a row in the `results`
-// table.
-pub struct EventResult {
-    _id: i32,
-    _path: String,
-    _end_time: i64,
-}
-
-pub async fn new(database_name: String) -> Result<Pool<SqliteConnectionManager>, Error> {
-    let manager = SqliteConnectionManager::file(database_name);
-    let pool = r2d2::Pool::new(manager).unwrap();
-
-    pool.get().unwrap().execute(EVENTS, params![])?;
-    pool.get().unwrap().execute(RESULTS, params![])?;
-
-    info!("Database initialized");
-
-    Ok(pool)
-}
-
-// Get the next event from the database. Can potentially have no events recorded.
-pub async fn next_event(
-    pool: Pool<SqliteConnectionManager>,
-) -> Result<Option<(String, String, i64)>, Error> {
-    let conn = pool.get().unwrap();
-    let mut stmt =
-        conn.prepare("SELECT * FROM events WHERE start_time > ?1 ORDER BY start_time ASC LIMIT 1")?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    let mut rows = stmt.query_map(params![now], |row| {
-        Ok(Event {
-            _id: row.get(0)?,
-            meeting_name: row.get(1)?,
-            description: row.get(2)?,
-            start_time: row.get(3)?,
-        })
-    })?;
-
-    if let Some(event) = rows.next() {
-        let event = event?;
-        info!(
-            "Next event: {} {} at {}",
-            event.meeting_name, event.description, event.start_time
-        );
-        Ok(Some((
-            event.meeting_name,
-            event.description,
-            event.start_time,
-        )))
-    } else {
-        Ok(None)
-    }
-}
-
-// Get next event by description
-pub async fn next_event_by_description(
-    pool: Pool<SqliteConnectionManager>,
-    description: Description,
-) -> Result<Option<(String, String, i64)>, Error> {
-    let conn = pool.get().unwrap();
-    let mut stmt = conn.prepare("SELECT * FROM events WHERE description = ?1 AND start_time > ?2 ORDER BY start_time ASC LIMIT 1")?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    let mut rows = stmt.query_map(params![description.as_str(), now], |row| {
-        Ok(Event {
-            _id: row.get(0)?,
-            meeting_name: row.get(1)?,
-            description: row.get(2)?,
-            start_time: row.get(3)?,
-        })
-    })?;
-
-    if let Some(event) = rows.next() {
-        let event = event?;
-        info!(
-            "Next event: {} {} at {}",
-            event.meeting_name, event.description, event.start_time
-        );
-        Ok(Some((
-            event.meeting_name,
-            event.description,
-            event.start_time,
-        )))
-    } else {
-        Ok(None)
-    }
-}
-
-// Get the previous result from the database.
-pub async fn previous_result(pool: Pool<SqliteConnectionManager>) -> Result<Option<String>, Error> {
-    let conn = pool.get().unwrap();
-    let mut stmt = conn.prepare("SELECT * FROM results ORDER BY id DESC LIMIT 1")?;
-
-    let mut rows = stmt.query_map(params![], |row| {
-        Ok(EventResult {
-            _id: row.get(0)?,
-            _path: row.get(1)?,
-            _end_time: row.get(2)?,
-        })
-    })?;
-
-    if let Some(event) = rows.next() {
-        let event = event?;
-        Ok(Some(event._path))
-    } else {
-        Ok(None)
-    }
-}
-
-// Given a path, checks if the message has been delivered.
 pub async fn is_event_delivered(
-    pool: Pool<SqliteConnectionManager>,
+    pool: &SqlitePool,
     path: &str,
-) -> Result<bool, Error> {
-    let conn = pool.get().unwrap();
-    let mut stmt = conn.prepare("SELECT * FROM results WHERE path = ?1")?;
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let result = sqlx::query!("SELECT TRUE FROM results WHERE path = ?", path)
+        .fetch_optional(pool)
+        .await?;
 
-    let mut rows = stmt.query_map(params![path], |row| {
-        Ok(EventResult {
-            _id: row.get(0)?,
-            _path: row.get(1)?,
-            _end_time: row.get(2)?,
-        })
-    })?;
-
-    Ok(rows.next().is_some())
+    Ok(result.is_some())
 }
 
-// Given an Event with a meeting_name and a vector of Timetables, insert each timetable
-// for the given meeting_name into the database.
-pub fn insert_event(pool: Pool<SqliteConnectionManager>, event: Event) -> Result<(), Error> {
-    let conn = pool.get().unwrap();
-    let mut stmt = conn.prepare(
-        "INSERT INTO events (meeting_name, description, start_time) VALUES (?1, ?2, ?3)",
-    )?;
+pub async fn next_event_filtered(
+    pool: &SqlitePool,
+    event_type: Option<EventType>,
+) -> Result<Option<(String, EventType, i64)>, Box<dyn std::error::Error>> {
+    match event_type {
+        Some(event_type) => {
+            let event_type_id = event_type as i64;
+            let result = sqlx::query!(
+                "SELECT meeting_name, event_type_id, start_time
+                FROM events
+                WHERE start_time > unixepoch()
+                AND event_type_id = ?
+                ORDER BY start_time
+                LIMIT 1;",
+                event_type_id,
+            )
+            .fetch_optional(pool)
+            .await?;
 
-    stmt.execute(params![
-        event.meeting_name,
-        event.description,
-        event.start_time
-    ])?;
+            match result {
+                Some(data) => {
+                    let meeting_name = data.meeting_name.unwrap();
+                    let event_name = EventType::from_i64(data.event_type_id.unwrap());
+                    let start_time = data.start_time.unwrap();
 
-    Ok(())
+                    Ok(Some((meeting_name, event_name, start_time)))
+                }
+                None => Ok(None),
+            }
+        }
+        None => {
+            let result = sqlx::query!(
+                "SELECT meeting_name, event_type_id, start_time
+                FROM events
+                WHERE start_time > unixepoch()
+                ORDER BY start_time
+                LIMIT 1;",
+            )
+            .fetch_optional(pool)
+            .await?;
+
+            match result {
+                Some(data) => {
+                    let meeting_name = data.meeting_name.unwrap();
+                    let event_name = EventType::from_i64(data.event_type_id.unwrap());
+                    let start_time = data.start_time.unwrap();
+
+                    Ok(Some((meeting_name, event_name, start_time)))
+                }
+                None => Ok(None),
+            }
+        }
+    }
 }
 
-// Given an EventResult with a path and an end_time, insert the result into the database.
-pub fn insert_result(pool: Pool<SqliteConnectionManager>, path: &str) -> Result<(), Error> {
-    let conn = pool.get().unwrap();
-    let mut stmt = conn.prepare("INSERT INTO results (path, end_time) VALUES (?1, ?2)")?;
+// Get latest path in the past
+pub async fn get_latest_path(
+    pool: &SqlitePool,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let row = sqlx::query!("SELECT path FROM results ORDER BY id DESC LIMIT 1",)
+        .fetch_optional(pool)
+        .await?;
 
-    // FIXME: Add migration to drop end_time column
-    stmt.execute(params![path, 0])?;
-
-    Ok(())
+    match row {
+        Some(record) => Ok(Some(record.path)),
+        None => Ok(None),
+    }
 }

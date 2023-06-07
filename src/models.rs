@@ -114,7 +114,7 @@ pub struct Dr4 {
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Root {
+pub struct EventTracker {
     pub season_context: SeasonContext,
     pub race: Race,
 }
