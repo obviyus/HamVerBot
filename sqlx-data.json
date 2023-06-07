@@ -1,0 +1,211 @@
+{
+  "db": "SQLite",
+  "10355835f1463d02dc7f0dbb082ac95d72e03262c1f40e589ba25bdb34726810": {
+    "describe": {
+      "columns": [
+        {
+          "name": "TRUE",
+          "ordinal": 0,
+          "type_info": "Int"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT TRUE FROM results WHERE path = ?"
+  },
+  "196c25c7a59839195e4600b8148721c7ab8f8d028c7100adfb5396dadbbaac52": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO results (path, data, event_id) VALUES (?, ?, (SELECT id FROM events WHERE start_time < unixepoch() ORDER BY start_time DESC LIMIT 1))"
+  },
+  "3035cbf57d6b55e72dd5333b082036ed9cfc558aef0910df9415a79b9a96bbc1": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "INSERT INTO channels (name) VALUES (?)"
+  },
+  "3d04d69a4b7fc469e1fb64b6466bc137829ce1bb2bdf9dc2db726b60e81cf238": {
+    "describe": {
+      "columns": [
+        {
+          "name": "meeting_name",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "event_type_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "start_time",
+          "ordinal": 2,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        true,
+        true,
+        true
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT meeting_name, event_type_id, start_time\n                FROM events\n                WHERE start_time > unixepoch()\n                ORDER BY start_time\n                LIMIT 1;"
+  },
+  "5a39f7ae4653b97fa75c0cc7bec55d3874fdcc2a7c47b2231963b7da44c13fc4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "data",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT data FROM championship_standings WHERE type = 0 LIMIT 1"
+  },
+  "5c6cbae6e06313f1e3eaf1260af7e97ef19d394612f590e75b671fe36489ca83": {
+    "describe": {
+      "columns": [
+        {
+          "name": "path",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT path FROM results ORDER BY id DESC LIMIT 1"
+  },
+  "89f89e39fe3f742dde2ef71f430e850c029457498a786f95584218ea7ee1482c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "name",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT name FROM channels;"
+  },
+  "9babdef29a8df57498420de659195a85ca9421878f8948aa367dfd5ff7a7b575": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO championship_standings (data, type) VALUES (?, 1) ON CONFLICT (type) DO UPDATE SET data = ?, create_time = CURRENT_TIMESTAMP"
+  },
+  "adf1ad4dfb08d2cc69c7303541c277a2503a3e6ebe3415dcd4e5c1cc37ebb5dd": {
+    "describe": {
+      "columns": [
+        {
+          "name": "meeting_name",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "event_type_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "start_time",
+          "ordinal": 2,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        true,
+        true,
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT meeting_name, event_type_id, start_time\n                FROM events\n                WHERE start_time > unixepoch()\n                AND event_type_id = ?\n                ORDER BY start_time\n                LIMIT 1;"
+  },
+  "c89504f5d02d0606f7d5291e07f2b0fd87005031163392f76bb626c1b56ca1a6": {
+    "describe": {
+      "columns": [
+        {
+          "name": "data",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT data FROM results WHERE path = ?"
+  },
+  "edcea1b2cf7c96719900fd384f370444ddd440410eb6007c9a3dc76ab4ab3a32": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO championship_standings (data, type) VALUES (?, 0) ON CONFLICT (type) DO UPDATE SET data = ?, create_time = CURRENT_TIMESTAMP"
+  },
+  "efd43aa61f438f50bf3151a3155ba55b96e35880f4412667e55be2f18a41e994": {
+    "describe": {
+      "columns": [
+        {
+          "name": "data",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT data FROM championship_standings WHERE type = 1 LIMIT 1"
+  }
+}
