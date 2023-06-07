@@ -11,18 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-
-      - name: Create DB
-        # Create a dummy sqlite DB to compile successfully
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
-      - run: |
-          python -c "import sqlite3; sqlite3.connect('HamVerBot.db')"
 
       - name: Run cargo bloat
         uses: orf/cargo-bloat-action@v1
