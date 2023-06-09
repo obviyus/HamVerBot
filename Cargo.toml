@@ -10,14 +10,21 @@ repository = "https://github.com/obviyus/HamVerBot"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+irc = { version = "0.15.0", default-features = false, features = [
+  "ctcp",
+  "toml_config",
+  "tls-rust",
+] }
+log = "0.4.18"
 base64 = "0.21.2"
 chrono = "0.4.26"
 dotenv = "0.15.0"
 env_logger = "0.10.0"
 futures = "0.3.28"
-irc = "0.15.0"
-log = "0.4.18"
-reqwest = { version = "0.11.18", features = ["json"] }
+reqwest = { version = "0.11.14", default-features = false, features = [
+  "json",
+  "rustls-tls",
+] }
 serde = { version = "1.0.164", features = ["derive"] }
 serde_json = "1.0.96"
 sqlx = { version = "0.6.3", features = [
