@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "hamverbot-py"
+version = "0.1.0"
+description = ""
+authors = ["Ayaan Zaidi <zaidi@uplause.io>"]
+readme = "README.md"
+packages = [{include = "hamverbot_py"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+irctokens = "^2.0.2"
+ircrobots = "^0.6.6"
+caribou = "^0.3.0"
+requests = "^2.31.0"
+aiohttp = "^3.8.6"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
