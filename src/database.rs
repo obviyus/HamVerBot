@@ -14,13 +14,23 @@ impl EventType {
     pub fn from_str(s: &str) -> Option<EventType> {
         match s {
             "livery reveal" | "l" | "livery" => Some(EventType::LiveryReveal),
-            "practice 1" | "p1" => Some(EventType::FreePractice1),
-            "practice 2" | "p2" => Some(EventType::FreePractice2),
-            "practice 3" | "p3" => Some(EventType::FreePractice3),
+            "practice 1" | "p1" | "fp1" => Some(EventType::FreePractice1),
+            "practice 2" | "p2" | "fp2" => Some(EventType::FreePractice2),
+            "practice 3" | "p3" | "fp3" => Some(EventType::FreePractice3),
             "qualifying" | "quali" | "q" => Some(EventType::Qualifying),
             "sprint" | "s" => Some(EventType::Sprint),
             "race" | "r" | "gp" => Some(EventType::Race),
             _ => None,
+        }
+    }
+
+    pub fn to_emoji(&self) -> &str {
+        match self {
+            EventType::LiveryReveal => "",
+            EventType::FreePractice1 | EventType::FreePractice2 | EventType::FreePractice3 => "🏎️",
+            EventType::Qualifying => "⏱️",
+            EventType::Sprint => "🏎",
+            EventType::Race => "🏁",
         }
     }
 
