@@ -1,8 +1,9 @@
-use std::ops::Deref;
+use std::{error::Error, ops::Deref};
 
+use base64::{engine::general_purpose, Engine};
 use irc::{
     client::{prelude::Config, Client, Sender},
-    proto::{Capability, Command},
+    proto::{Capability, Command, Response},
 };
 use log::{error, info};
 use sqlx::SqlitePool;
@@ -12,6 +13,29 @@ pub struct HamVerBotConfig {
     pub command_prefix: String,
     pub nickname: String,
     pub password: String,
+}
+
+pub async fn handle_authenticate(
+    username: &str,
+    password: &str,
+    sender: &Sender,
+) -> Result<(), Box<dyn Error>> {
+    let encoded =
+        general_purpose::STANDARD.encode(format!("{}\x00{}\x00{}", username, username, password));
+
+    sender.send(Command::AUTHENTICATE(encoded))?;
+    sender.send(Command::CAP(None, "END".parse()?, None, None))?;
+
+    Ok(())
+}
+
+pub async fn handle_response(code: Response, sender: &Sender) -> Result<(), Box<dyn Error>> {
+    if code == Response::RPL_SASLSUCCESS {
+        info!("Successfully authenticated");
+        sender.send(Command::CAP(None, "END".parse().unwrap(), None, None))?;
+    }
+
+    Ok(())
 }
 
 pub async fn load_config() -> Result<HamVerBotConfig, Box<dyn std::error::Error>> {
