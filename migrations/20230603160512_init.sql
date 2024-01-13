@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS events (
   meeting_name TEXT NOT NULL,
   event_type_id INTEGER NOT NULL,
   start_time INTEGER NOT NULL,
+  event_slug TEXT NOT NULL UNIQUE,
   FOREIGN KEY (event_type_id) REFERENCES event_type (id)
 );
 
