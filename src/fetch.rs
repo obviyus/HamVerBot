@@ -1,22 +1,54 @@
-use std::{env, error::Error};
+use anyhow::Result;
+use chrono::{Datelike, Utc};
+use std::{collections::HashMap, env};
 
+use log::debug;
+use serde_json::Value;
 use sqlx::SqlitePool;
 
-use crate::models::{
-    CurrentConstructorStandings, CurrentDriverStandings, EventTracker, F1APIDriverStanding, SPFeed,
-    SessionInfo, SessionResults,
+use crate::{
+    database::EventType,
+    models::{
+        CalendarEvents, CurrentConstructorStandings, CurrentDriverStandings, DriverList,
+        EventTracker, F1APIDriverStanding, SessionInfo, SessionResults,
+    },
 };
 
 const F1_API_ENDPOINT: &str = "https://api.formula1.com/v1/event-tracker";
 const F1_SESSION_ENDPOINT: &str = "https://livetiming.formula1.com/static";
 const ERGAST_API_ENDPOINT: &str = "https://ergast.com/api/f1";
 
-// Fetch the next closest event from the F1 API
-pub async fn fetch_next_event() -> Result<Option<String>, Box<dyn Error + Sync + Send>> {
+pub async fn fetch_json<T: serde::de::DeserializeOwned>(
+    url: &str,
+    headers: Option<reqwest::header::HeaderMap>,
+) -> Result<T> {
     let client = reqwest::Client::new();
-    let body = client
-        .get(F1_API_ENDPOINT)
-        .headers({
+    let mut request = client.get(url);
+
+    if let Some(headers) = headers {
+        request = request.headers(headers);
+    }
+
+    let body = request.send().await?.text_with_charset("utf-8-sig").await?;
+    let data: T = serde_json::from_str(body.trim_start_matches('\u{feff}'))?;
+
+    Ok(data)
+}
+
+fn parse_datetime(
+    date: &str,
+    offset: &str,
+) -> Result<chrono::DateTime<chrono::Utc>, chrono::ParseError> {
+    let datetime_string = format!("{} {}", date, offset);
+    chrono::DateTime::parse_from_str(&datetime_string, "%Y-%m-%dT%H:%M:%S %z")
+        .map(|dt| dt.with_timezone(&chrono::Utc)) // Convert to Utc for universal comparison
+}
+
+// Fetch the next closest event from the F1 API
+pub async fn fetch_next_event() -> Result<Option<String>> {
+    let data = fetch_json::<EventTracker>(
+        F1_API_ENDPOINT,
+        Some({
             let mut headers = reqwest::header::HeaderMap::new();
             headers.insert(
                 "apiKey",
@@ -27,14 +59,9 @@ pub async fn fetch_next_event() -> Result<Option<String>, Box<dyn Error + Sync +
             headers.insert("locale", reqwest::header::HeaderValue::from_static("en"));
 
             headers
-        })
-        .send()
-        .await?
-        .text_with_charset("utf-8-sig")
-        .await?;
-
-    // Strip BOM from UTF-8-SIG
-    let data: EventTracker = serde_json::from_str(body.trim_start_matches('\u{feff}')).unwrap();
+        }),
+    )
+    .await?;
 
     let closest_event = data
         .season_context
@@ -42,30 +69,35 @@ pub async fn fetch_next_event() -> Result<Option<String>, Box<dyn Error + Sync +
         .into_iter()
         .filter(|event| event.state == "upcoming")
         .min_by(|a, b| {
-            let start_time_string = format!("{} {}", a.start_time, a.gmt_offset);
-            let start_time =
-                chrono::DateTime::parse_from_str(&start_time_string, "%Y-%m-%dT%H:%M:%S %z")
-                    .unwrap();
-
-            start_time.cmp(
-                &chrono::DateTime::parse_from_str(
-                    &format!("{} {}", b.start_time, b.gmt_offset),
-                    "%Y-%m-%dT%H:%M:%S %z",
-                )
-                .unwrap(),
-            )
+            let start_time_a = match parse_datetime(&a.start_time, &a.gmt_offset) {
+                Ok(time) => time,
+                Err(e) => {
+                    eprintln!("Failed to parse start time for event a: {}", e);
+                    return std::cmp::Ordering::Equal;
+                }
+            };
+            let start_time_b = match parse_datetime(&b.start_time, &b.gmt_offset) {
+                Ok(time) => time,
+                Err(e) => {
+                    eprintln!("Failed to parse start time for event b: {}", e);
+                    return std::cmp::Ordering::Equal;
+                }
+            };
+            start_time_a.cmp(&start_time_b)
         });
 
     match closest_event {
         Some(event) => {
-            let closest_event_start_time = chrono::DateTime::parse_from_str(
-                &format!("{} {}", event.start_time, event.gmt_offset),
-                "%Y-%m-%dT%H:%M:%S %z",
-            );
+            let closest_event_start_time =
+                match parse_datetime(&event.start_time, &event.gmt_offset) {
+                    Ok(time) => time,
+                    Err(e) => {
+                        eprintln!("Failed to parse start time for event: {}", e);
+                        return Ok(None);
+                    }
+                };
 
-            // Check if start time is within 5 minutes
             if closest_event_start_time
-                .unwrap()
                 .signed_duration_since(chrono::Utc::now())
                 .num_minutes()
                 <= 5
@@ -82,11 +114,129 @@ pub async fn fetch_next_event() -> Result<Option<String>, Box<dyn Error + Sync +
     }
 }
 
-// Fetch results for a given path from the F1 API
-pub async fn fetch_results(
+pub async fn fetch_driver_list(path: &str, pool: &SqlitePool) -> Result<()> {
+    let response: HashMap<String, Value> = fetch_json(
+        format!("{}/{}DriverList.json", F1_SESSION_ENDPOINT, path).as_str(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    for driver_value in response.values() {
+        let driver: DriverList = serde_json::from_value(driver_value.clone())?;
+        sqlx::query!("INSERT INTO driver_list (racing_number, reference, first_name, last_name, full_name, broadcast_name, tla, country_code, team_name, team_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (racing_number) DO UPDATE SET reference = ?, first_name = ?, last_name = ?, full_name = ?, broadcast_name = ?, tla = ?, country_code = ?, team_name = ?, team_color = ?",
+            driver.racing_number,
+            driver.reference,
+            driver.first_name,
+            driver.last_name,
+            driver.full_name,
+            driver.broadcast_name,
+            driver.tla,
+            driver.country_code,
+            driver.team_name,
+            driver.team_color,
+            driver.reference,
+            driver.first_name,
+            driver.last_name,
+            driver.full_name,
+            driver.broadcast_name,
+            driver.tla,
+            driver.country_code,
+            driver.team_name,
+            driver.team_color,
+        ).execute(pool).await?;
+    }
+
+    Ok(())
+}
+
+async fn extract_position_and_number(
+    data: HashMap<String, Value>,
     pool: &SqlitePool,
-    path: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<Vec<F1APIDriverStanding>> {
+    #[derive(Debug)]
+    struct DriverData {
+        position: String,
+        racing_number: String,
+        last_lap_time: String,
+        interval_to_position_ahead: String,
+    }
+
+    if let Some(Value::Object(lines)) = data.get("Lines") {
+        let mut extracted_data: Vec<DriverData> = Vec::new();
+
+        for (_, driver_data) in lines.iter() {
+            if let (
+                Some(position),
+                Some(racing_number),
+                Some(last_lap_time),
+                Some(interval_to_position_ahead),
+            ) = (
+                driver_data.get("Position").and_then(|v| v.as_str()),
+                driver_data.get("RacingNumber").and_then(|v| v.as_str()),
+                driver_data
+                    .get("LastLapTime")
+                    .and_then(|v| v.get("Value"))
+                    .and_then(|v| v.as_str()),
+                driver_data
+                    .get("IntervalToPositionAhead")
+                    .and_then(|v| v.get("Value"))
+                    .and_then(|v| v.as_str()),
+            ) {
+                let current_driver_data = DriverData {
+                    position: position.to_string(),
+                    racing_number: racing_number.to_string(),
+                    last_lap_time: last_lap_time.to_string(),
+                    interval_to_position_ahead: interval_to_position_ahead.to_string(),
+                };
+
+                extracted_data.push(current_driver_data);
+            } else {
+                println!("Missing or invalid data for a driver: {:?}", driver_data);
+            }
+        }
+
+        // Get driver TLA from driver list by racing number
+        let driver_list = sqlx::query!("SELECT tla, racing_number, team_name FROM driver_list")
+            .fetch_all(pool)
+            .await?;
+
+        debug!("Driver list: {:?}", driver_list);
+        debug!("Extracted data: {:?}", extracted_data);
+
+        let data_with_tla = extracted_data
+            .iter()
+            .map(|data| {
+                let driver = driver_list
+                    .iter()
+                    .find(|driver| {
+                        driver.racing_number
+                            == i64::from_str_radix(&data.racing_number, 10).unwrap()
+                    })
+                    .unwrap();
+
+                F1APIDriverStanding {
+                    position: i8::from_str_radix(&data.position, 10).unwrap(),
+                    driver_name: driver.tla.clone(),
+                    team_name: driver.team_name.clone(),
+                    time: data.last_lap_time.clone(),
+                    difference: data.interval_to_position_ahead.clone(),
+                }
+            })
+            .collect::<Vec<F1APIDriverStanding>>();
+
+        Ok(data_with_tla)
+    } else {
+        Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid data",
+        ))
+        .into())
+    }
+}
+
+// Fetch results for a given path from the F1 API
+pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
     let result = sqlx::query!("SELECT data FROM results WHERE path = ?", path)
         .fetch_optional(pool)
         .await?;
@@ -98,43 +248,26 @@ pub async fn fetch_results(
             session_result = serde_json::from_str(&previous_result.data).unwrap();
         }
         None => {
-            let url = format!("{}/{}SPFeed.json", F1_SESSION_ENDPOINT, path);
-            let body = reqwest::get(&url)
-                .await?
-                .text_with_charset("utf-8-sig")
-                .await?;
+            debug!("Fetching TimingDataF1 for {}", path);
+            let session = fetch_json::<HashMap<String, Value>>(
+                format!("{}/{}TimingDataF1.json", F1_SESSION_ENDPOINT, path).as_str(),
+                None,
+            )
+            .await
+            .unwrap();
 
-            // Strip BOM from UTF-8-SIG
-            let session: SPFeed =
-                serde_json::from_str(body.trim_start_matches('\u{feff}')).unwrap();
+            debug!("Fetching SessionInfo for {}", path);
+            let session_info = fetch_json::<SessionInfo>(
+                format!("{}/{}", F1_SESSION_ENDPOINT, "SessionInfo.json").as_str(),
+                None,
+            )
+            .await
+            .unwrap();
 
-            let mut standings = session
-                .free
-                .data
-                .dr
-                .iter()
-                .map(|dr| {
-                    let driver_name = dr.f.0.to_string();
-                    let team_name = dr.f.2.to_string();
-                    let time = dr.f.1.to_string();
-                    let difference = dr.f.4.to_string();
-                    let position = dr.f.3.to_string();
+            let standings = extract_position_and_number(session, pool).await?;
 
-                    F1APIDriverStanding {
-                        position: position.parse::<i8>().unwrap(),
-                        driver_name,
-                        team_name,
-                        time,
-                        difference,
-                    }
-                })
-                .collect::<Vec<F1APIDriverStanding>>();
-
-            standings.sort_by(|a, b| a.position.cmp(&b.position));
-
-            let session_title = format!("{}: {}", session.free.data.r, session.free.data.s);
             session_result = SessionResults {
-                title: session_title,
+                title: session_info.meeting.official_name,
                 standings,
             };
 
@@ -163,34 +296,24 @@ pub async fn fetch_results(
 }
 
 // Fetch the path of the current event from the F1 API
-pub async fn read_current_event() -> Result<(String, bool), reqwest::Error> {
-    let body = reqwest::get(format!("{}/{}", F1_SESSION_ENDPOINT, "SessionInfo.json"))
-        .await?
-        .text_with_charset("utf-8-sig")
-        .await?;
-
-    // Strip BOM from UTF-8-SIG
-    let session: SessionInfo = serde_json::from_str(body.trim_start_matches('\u{feff}')).unwrap();
+pub async fn read_current_event() -> Result<(String, bool)> {
+    let session = fetch_json::<SessionInfo>(
+        format!("{}/{}", F1_SESSION_ENDPOINT, "SessionInfo.json").as_str(),
+        None,
+    )
+    .await
+    .unwrap();
 
     Ok((session.path, session.archive_status.status == "Complete"))
 }
 
-pub async fn fetch_wdc_standings(
-    pool: &SqlitePool,
-) -> Result<CurrentDriverStandings, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
-    let body = client
-        .get(format!(
-            "{}/current/driverStandings.json",
-            ERGAST_API_ENDPOINT
-        ))
-        .send()
-        .await?
-        .text_with_charset("utf-8-sig")
-        .await?;
-
-    let standings: CurrentDriverStandings =
-        serde_json::from_str(body.trim_start_matches('\u{feff}'))?;
+pub async fn fetch_wdc_standings(pool: &SqlitePool) -> Result<CurrentDriverStandings> {
+    let standings = fetch_json::<CurrentDriverStandings>(
+        format!("{}/current/driverStandings.json", ERGAST_API_ENDPOINT).as_str(),
+        None,
+    )
+    .await
+    .unwrap();
 
     let json_standings = serde_json::to_string(&standings)?;
 
@@ -206,7 +329,7 @@ pub async fn fetch_wdc_standings(
 }
 
 // Get current WDC standings
-pub async fn return_wdc_standings(pool: &SqlitePool) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn return_wdc_standings(pool: &SqlitePool) -> Result<String> {
     let row = sqlx::query!("SELECT data FROM championship_standings WHERE type = 0 LIMIT 1",)
         .fetch_optional(pool)
         .await?;
@@ -240,22 +363,13 @@ pub async fn return_wdc_standings(pool: &SqlitePool) -> Result<String, Box<dyn s
     Ok(output)
 }
 
-pub async fn fetch_wcc_standings(
-    pool: &SqlitePool,
-) -> Result<CurrentConstructorStandings, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
-    let body = client
-        .get(format!(
-            "{}/current/constructorStandings.json",
-            ERGAST_API_ENDPOINT
-        ))
-        .send()
-        .await?
-        .text_with_charset("utf-8-sig")
-        .await?;
-
-    let standings: CurrentConstructorStandings =
-        serde_json::from_str(body.trim_start_matches('\u{feff}'))?;
+pub async fn fetch_wcc_standings(pool: &SqlitePool) -> Result<CurrentConstructorStandings> {
+    let standings = fetch_json::<CurrentConstructorStandings>(
+        format!("{}/current/constructorStandings.json", ERGAST_API_ENDPOINT).as_str(),
+        None,
+    )
+    .await
+    .unwrap();
 
     let json_standings = serde_json::to_string(&standings)?;
 
@@ -271,7 +385,7 @@ pub async fn fetch_wcc_standings(
 }
 
 // Get the current WCC standings
-pub async fn return_wcc_standings(pool: &SqlitePool) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn return_wcc_standings(pool: &SqlitePool) -> Result<String> {
     let row = sqlx::query!("SELECT data FROM championship_standings WHERE type = 1 LIMIT 1")
         .fetch_optional(pool)
         .await?;
@@ -303,4 +417,57 @@ pub async fn return_wcc_standings(pool: &SqlitePool) -> Result<String, Box<dyn s
         });
 
     Ok(output)
+}
+
+// Fetch the current community F1 calendar
+pub async fn refresh_current_calendar(pool: &SqlitePool) -> Result<()> {
+    let current_year = Utc::now().year();
+
+    let calendar_events = fetch_json::<CalendarEvents>(
+        format!(
+            "https://raw.githubusercontent.com/sportstimes/f1/main/_db/f1/{}.json",
+            current_year
+        )
+        .as_str(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    for race in calendar_events.races {
+        for (key, value) in race.sessions.iter() {
+            if let Some(event_type) = EventType::from_str(key) {
+                println!("attempting to parse: {}", value);
+                let event_start_time = chrono::DateTime::parse_from_str(format!("{} +00:00", &value).as_str(), "%Y-%m-%dT%H:%M:%SZ %z");
+                match event_start_time {
+                    Ok(event_start_time) => {
+                        let meeting_name = format!(
+                            "{} FORMULA 1 {} GRAND PRIX {}",
+                            event_type.to_emoji(),
+                            race.name.to_uppercase(),
+                            current_year
+                        );
+
+                        let slug = format!("{}-{}-{}", current_year, race.slug, key);
+                        let event_type_id = event_type as i64;
+                        let start_timestamp = event_start_time.timestamp();
+
+                        sqlx::query!(
+                            "INSERT INTO events (meeting_name, event_type_id, start_time, event_slug) VALUES (?, ?, ?, ?) ON CONFLICT (event_slug) DO UPDATE SET start_time = ?;",
+                            meeting_name, 
+                            event_type_id, 
+                            start_timestamp, 
+                            slug, 
+                            start_timestamp
+                        ).execute(pool).await?;
+                    }
+                    Err(error) => {
+                        eprintln!("{}", error)
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
