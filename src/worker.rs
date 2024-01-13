@@ -1,6 +1,10 @@
+use std::{any::Any, sync::Arc};
+
 use chrono::Utc;
+use fetch::{fetch_wcc_standings, fetch_wdc_standings};
 use irc::client::Sender;
 use log::info;
+use serde::ser::StdError;
 use sqlx::SqlitePool;
 
 use crate::{database::is_event_delivered, fetch, irc::broadcast};
@@ -13,9 +17,22 @@ pub enum JobType {
     Wdc,
 }
 
+pub async fn process_job(
+    job_type: JobType,
+    pool: &Arc<SqlitePool>,
+    sender: &Sender,
+) -> Result<Box<dyn Any + Send>, Box<dyn StdError>> {
+    match job_type {
+        JobType::Result => Ok(Box::new(result_worker(&*pool, sender).await?)),
+        JobType::Alert => Ok(Box::new(alert_worker(&*pool, sender).await?)),
+        JobType::Wdc => Ok(Box::new(fetch_wdc_standings(&*pool).await?)),
+        JobType::Wcc => Ok(Box::new(fetch_wcc_standings(&*pool).await?)),
+    }
+}
+
 // Check if a new result is posted on th F1 API
 // If so, fetch the results and broadcast them to channels
-pub async fn result_worker(
+async fn result_worker(
     pool: &SqlitePool,
     sender: &Sender,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -37,7 +54,7 @@ pub async fn result_worker(
 
 // Check if the next scheduled is within 5 minutes
 // If so, broadcast a message to channels
-pub async fn alert_worker(
+async fn alert_worker(
     pool: &SqlitePool,
     sender: &Sender,
 ) -> Result<(), Box<dyn std::error::Error>> {

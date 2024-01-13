@@ -79,6 +79,33 @@ pub struct Free {
     pub data: Data,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriverList {
+    #[serde(rename = "BroadcastName")]
+    pub broadcast_name: String,
+    #[serde(rename = "CountryCode")]
+    pub country_code: String,
+    #[serde(rename = "FirstName")]
+    pub first_name: String,
+    #[serde(rename = "FullName")]
+    pub full_name: String,
+    #[serde(rename = "LastName")]
+    pub last_name: String,
+    #[serde(rename = "Line")]
+    pub line: i64,
+    #[serde(rename = "RacingNumber")]
+    pub racing_number: String,
+    #[serde(rename = "Reference")]
+    pub reference: String,
+    #[serde(rename = "TeamColour")]
+    pub team_color: String,
+    #[serde(rename = "TeamName")]
+    pub team_name: String,
+    #[serde(rename = "Tla")]
+    pub tla: String,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Data {
@@ -263,4 +290,46 @@ pub struct ConstructorStanding {
     pub wins: String,
     #[serde(rename = "Constructor")]
     pub constructor: Constructor,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEvents {
+    pub races: Vec<CalendarRace>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarRace {
+    pub name: String,
+    pub location: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub round: i64,
+    pub slug: String,
+    pub locale_key: String,
+    pub tbc: bool,
+    pub sessions: Sessions,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Sessions {
+    pub fp1: String,
+    pub fp2: String,
+    pub fp3: String,
+    pub qualifying: String,
+    pub gp: String,
+}
+
+impl Sessions {
+    pub fn iter(&self) -> Vec<(&str, String)> {
+        vec![
+            ("fp1", self.fp1.clone()),
+            ("fp2", self.fp2.clone()),
+            ("fp3", self.fp3.clone()),
+            ("qualifying", self.qualifying.clone()),
+            ("gp", self.gp.clone()),
+        ]
+    }
 }
