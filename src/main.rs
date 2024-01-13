@@ -3,8 +3,7 @@ use std::{env, sync::Arc};
 use ::futures::prelude::*;
 use ::irc::client::prelude::*;
 
-use base64::{engine::general_purpose, Engine as _};
-use log::{error, info};
+use log::{error, info, warn};
 use sqlx::SqlitePool;
 use tokio::sync::mpsc;
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -31,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let pool = SqlitePool::connect(
-        &(env::var("DATABASE_URL").unwrap_or("sqlite:HamVerBot.db".to_string())),
+        &env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:HamVerBot.db".to_string()),
     )
     .await?;
 
@@ -46,6 +45,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Perform SASL authentication
     irc::authenticate(&bot_config.nickname, &bot_config.password, &irc_client)?;
 
+    // Fetch driver list before anything else
+    match fetch::read_current_event().await {
+        Ok((path, _)) => {
+            fetch::fetch_driver_list(&path, &pool).await?;
+            fetch::refresh_current_calendar(&pool).await?;
+        }
+        Err(e) => {
+            error!("Failed to fetch driver list: {:?}", e);
+        }
+    }
+
     // Job scheduler for workers
     let scheduler = JobScheduler::new().await?;
 
@@ -53,14 +63,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Scheduling workers...");
     scheduler
-        .add(Job::new_async("0 1/5 * * * *", move |_, _| {
+        .add(Job::new_async("1/10 * * * * *", move |_, _| {
             let tx = tx.clone();
+            info!("Running result worker...");
 
             Box::pin(async move {
-                tx.send(JobType::Result).await.unwrap();
-                tx.send(JobType::Alert).await.unwrap();
-                tx.send(JobType::Wdc).await.unwrap();
-                tx.send(JobType::Wcc).await.unwrap();
+                if tx.send(JobType::Result).await.is_err() {
+                    warn!("Receiver dropped, cannot send Result job");
+                }
+                if tx.send(JobType::Alert).await.is_err() {
+                    warn!("Receiver dropped, cannot send Alert job");
+                }
+                if tx.send(JobType::Wdc).await.is_err() {
+                    warn!("Receiver dropped, cannot send Wdc job");
+                }
+                if tx.send(JobType::Wcc).await.is_err() {
+                    warn!("Receiver dropped, cannot send Wcc job");
+                }
             })
         })?)
         .await?;
@@ -72,79 +91,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sender_clone = sender.clone();
 
     tokio::spawn(async move {
-        loop {
-            while let Some(message) = rx.recv().await {
-                match message {
-                    JobType::Result => {
-                        match worker::result_worker(&pool_clone, &sender_clone).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("Failed to handle result: {:?}", e);
-                            }
-                        };
-                    }
-                    JobType::Alert => {
-                        match worker::alert_worker(&pool_clone, &sender_clone).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("Failed to handle alert: {:?}", e);
-                            }
-                        };
-                    }
-                    JobType::Wdc => {
-                        match fetch::fetch_wdc_standings(&pool_clone).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("Failed to handle WDC: {:?}", e);
-                            }
-                        };
-                    }
-                    JobType::Wcc => {
-                        match fetch::fetch_wcc_standings(&pool_clone).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("Failed to handle WCC: {:?}", e);
-                            }
-                        };
-                    }
-                }
+        while let Some(message) = rx.recv().await {
+            if let Err(e) = worker::process_job(message, &pool_clone, &sender_clone).await {
+                error!("Failed to handle job: {:?}", e);
             }
         }
     });
 
     while let Some(message) = stream.next().await.transpose()? {
-        // info!("Received message: {:?}", message.command);
+        info!("Received message: {:?}", message.command);
 
         match message.command {
             Command::CAP(_, ref subcommand, _, _) => {
                 if subcommand.to_str() == "ACK" {
-                    info!("Received ACK for SASL authentication.");
                     sender.send_sasl_plain()?;
                 }
             }
-
             Command::AUTHENTICATE(_) => {
-                info!("Got signal to continue authenticating");
-                sender.send(Command::AUTHENTICATE(general_purpose::STANDARD.encode(
-                    format!(
-                        "{}\x00{}\x00{}",
-                        bot_config.nickname, bot_config.nickname, bot_config.password
-                    ),
-                )))?;
-                sender.send(Command::CAP(None, "END".parse().unwrap(), None, None))?;
+                irc::handle_authenticate(&*bot_config.nickname, &*bot_config.password, &sender)
+                    .await?;
             }
-
-            Command::Response(code, _) => {
-                if code == Response::RPL_SASLSUCCESS {
-                    info!("Successfully authenticated");
-                    sender.send(Command::CAP(None, "END".parse().unwrap(), None, None))?;
-                }
-            }
-
+            Command::Response(code, _) => irc::handle_response(code, &sender).await?,
             Command::INVITE(ref _target, ref channel) => {
                 irc::join_channel(channel, &pool, &sender).await?;
             }
-
             Command::PRIVMSG(ref target, ref msg) => {
                 if msg.starts_with(&bot_config.command_prefix) {
                     let command = &msg[bot_config.command_prefix.len()..];
