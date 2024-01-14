@@ -1,3 +1,10 @@
+## [0.11.1](https://github.com/obviyus/HamVerBot/compare/v0.11.0...v0.11.1) (2024-01-14)
+
+
+### Bug Fixes
+
+* **results:** exclude livery event in fetcher ([ee6bebe](https://github.com/obviyus/HamVerBot/commit/ee6bebe22b62ca0dae20cec58375a4ee18e90c70))
+
 # [0.11.0](https://github.com/obviyus/HamVerBot/compare/v0.10.0...v0.11.0) (2024-01-14)
 
 
