@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO results (path, data, event_id) VALUES (?, ?, (SELECT id FROM events WHERE start_time < unixepoch() ORDER BY start_time DESC LIMIT 1))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "196c25c7a59839195e4600b8148721c7ab8f8d028c7100adfb5396dadbbaac52"
+}

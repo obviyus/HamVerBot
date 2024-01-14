@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT data FROM championship_standings WHERE type = 1 LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "data",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "efd43aa61f438f50bf3151a3155ba55b96e35880f4412667e55be2f18a41e994"
+}

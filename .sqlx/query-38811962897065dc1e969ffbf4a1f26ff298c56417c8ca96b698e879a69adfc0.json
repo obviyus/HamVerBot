@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO events (meeting_name, event_type_id, start_time, event_slug) VALUES (?, ?, ?, ?) ON CONFLICT (event_slug) DO UPDATE SET start_time = ?;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "38811962897065dc1e969ffbf4a1f26ff298c56417c8ca96b698e879a69adfc0"
+}
