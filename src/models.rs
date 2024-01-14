@@ -308,7 +308,7 @@ pub struct CalendarRace {
     pub round: i64,
     pub slug: String,
     pub locale_key: String,
-    pub tbc: bool,
+    pub tbc: Option<bool>,
     pub sessions: Sessions,
 }
 
@@ -316,20 +316,39 @@ pub struct CalendarRace {
 #[serde(rename_all = "camelCase")]
 pub struct Sessions {
     pub fp1: String,
-    pub fp2: String,
-    pub fp3: String,
-    pub qualifying: String,
+    pub fp2: Option<String>,
+    pub fp3: Option<String>,
     pub gp: String,
+    pub qualifying: String,
+    pub sprint: Option<String>,
+    pub sprint_qualifying: Option<String>,
 }
 
 impl Sessions {
     pub fn iter(&self) -> Vec<(&str, String)> {
-        vec![
-            ("fp1", self.fp1.clone()),
-            ("fp2", self.fp2.clone()),
-            ("fp3", self.fp3.clone()),
-            ("qualifying", self.qualifying.clone()),
-            ("gp", self.gp.clone()),
-        ]
+        let mut fields = Vec::new();
+
+        fields.push(("fp1", self.fp1.clone()));
+
+        if let Some(ref fp2) = self.fp2 {
+            fields.push(("fp2", fp2.clone()));
+        }
+
+        if let Some(ref fp3) = self.fp3 {
+            fields.push(("fp3", fp3.clone()));
+        }
+
+        fields.push(("qualifying", self.qualifying.clone()));
+        fields.push(("gp", self.gp.clone()));
+
+        if let Some(ref sprint) = self.sprint {
+            fields.push(("sprint", sprint.clone()));
+        }
+
+        if let Some(ref sprint_qualifying) = self.sprint_qualifying {
+            fields.push(("sprint_qualifying", sprint_qualifying.clone()));
+        }
+
+        fields
     }
 }

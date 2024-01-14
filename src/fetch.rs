@@ -420,13 +420,16 @@ pub async fn return_wcc_standings(pool: &SqlitePool) -> Result<String> {
 }
 
 // Fetch the current community F1 calendar
-pub async fn refresh_current_calendar(pool: &SqlitePool) -> Result<()> {
-    let current_year = Utc::now().year();
+pub async fn refresh_current_calendar(pool: &SqlitePool, year: Option<i32>) -> Result<()> {
+    let event_year = match year {
+        Some(year) => year,
+        None => Utc::now().year()
+    };
 
     let calendar_events = fetch_json::<CalendarEvents>(
         format!(
             "https://raw.githubusercontent.com/sportstimes/f1/main/_db/f1/{}.json",
-            current_year
+            event_year
         )
         .as_str(),
         None,
@@ -445,10 +448,10 @@ pub async fn refresh_current_calendar(pool: &SqlitePool) -> Result<()> {
                             "{} FORMULA 1 {} GRAND PRIX {}",
                             event_type.to_emoji(),
                             race.name.to_uppercase(),
-                            current_year
+                            event_year
                         );
 
-                        let slug = format!("{}-{}-{}", current_year, race.slug, key);
+                        let slug = format!("{}-{}-{}", event_year, race.slug, key);
                         let event_type_id = event_type as i64;
                         let start_timestamp = event_start_time.timestamp();
 
