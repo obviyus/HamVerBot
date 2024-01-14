@@ -1,3 +1,22 @@
+# [0.11.0](https://github.com/obviyus/HamVerBot/compare/v0.10.0...v0.11.0) (2024-01-14)
+
+
+### Bug Fixes
+
+* **calendar:** refresh for previous year for results ([35e191c](https://github.com/obviyus/HamVerBot/commit/35e191c5e8581de2d1c3490e8e588efa73a7df69))
+
+
+### Features
+
+* **api:** update API spec ([513e83d](https://github.com/obviyus/HamVerBot/commit/513e83d0a2e57d0e3bad4f02a8e5a69865bcdcd8))
+* **event_type:** additional outputs ([4448221](https://github.com/obviyus/HamVerBot/commit/4448221eee7478c776000ed51101510837174835))
+* **irc:** helper function for auth ([7c343d4](https://github.com/obviyus/HamVerBot/commit/7c343d44a44a1364a7e39843b95f9227f857ed47))
+* **models:** update models for F1Calendar API ([787d9af](https://github.com/obviyus/HamVerBot/commit/787d9afe34b294160622025d6bc99b3408bdc142))
+* **py:** remove py implementation ([946c7cc](https://github.com/obviyus/HamVerBot/commit/946c7cc501f53366534b31a08e790f10eedca0e5))
+* **sql:** additional tables for new API ([fbe8de8](https://github.com/obviyus/HamVerBot/commit/fbe8de8fce025feb79137ceed3828e66b07cff54))
+* **sqlx:** bump sqlx ([41d3ca4](https://github.com/obviyus/HamVerBot/commit/41d3ca46d3528571f4b0cd646ea456032d55c646))
+* **worker:** simplify job logic ([1a8a72f](https://github.com/obviyus/HamVerBot/commit/1a8a72fdc314d4256fff10464a2891a81be35a81))
+
 # [0.10.0](https://github.com/obviyus/HamVerBot/compare/v0.9.1...v0.10.0) (2023-06-09)
 
 
