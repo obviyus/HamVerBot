@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO driver_list (racing_number, reference, first_name, last_name, full_name, broadcast_name, tla, country_code, team_name, team_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (racing_number) DO UPDATE SET reference = ?, first_name = ?, last_name = ?, full_name = ?, broadcast_name = ?, tla = ?, country_code = ?, team_name = ?, team_color = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 19
+    },
+    "nullable": []
+  },
+  "hash": "92b60bfe19047eff68004d0afe502a6d149225588901d297d6281fd55cd5e040"
+}

@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT meeting_name, event_type_id, start_time\n                FROM events\n                WHERE start_time > unixepoch()\n                AND event_type_id = ?\n                ORDER BY start_time\n                LIMIT 1;",
+  "describe": {
+    "columns": [
+      {
+        "name": "meeting_name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "event_type_id",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "start_time",
+        "ordinal": 2,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "adf1ad4dfb08d2cc69c7303541c277a2503a3e6ebe3415dcd4e5c1cc37ebb5dd"
+}
