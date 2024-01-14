@@ -273,7 +273,7 @@ pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
 
             let json_result = serde_json::to_string(&session_result)?;
             sqlx::query!(
-                "INSERT INTO results (path, data, event_id) VALUES (?, ?, (SELECT id FROM events WHERE start_time < unixepoch() ORDER BY start_time DESC LIMIT 1))",
+                "INSERT INTO results (path, data, event_id) VALUES (?, ?, (SELECT id FROM events WHERE start_time < unixepoch() AND event_type_id != 1 ORDER BY start_time DESC LIMIT 1))",
                 path,
                 json_result
             )
