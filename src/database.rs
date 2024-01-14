@@ -92,9 +92,9 @@ pub async fn next_event_filtered(
 
             match result {
                 Some(data) => {
-                    let meeting_name = data.meeting_name.unwrap();
-                    let event_name = EventType::from_i64(data.event_type_id.unwrap());
-                    let start_time = data.start_time.unwrap();
+                    let meeting_name = data.meeting_name;
+                    let event_name = EventType::from_i64(data.event_type_id);
+                    let start_time = data.start_time;
 
                     Ok(Some((meeting_name, event_name, start_time)))
                 }
@@ -114,9 +114,9 @@ pub async fn next_event_filtered(
 
             match result {
                 Some(data) => {
-                    let meeting_name = data.meeting_name.unwrap();
-                    let event_name = EventType::from_i64(data.event_type_id.unwrap());
-                    let start_time = data.start_time.unwrap();
+                    let meeting_name = data.meeting_name;
+                    let event_name = EventType::from_i64(data.event_type_id);
+                    let start_time = data.start_time;
 
                     Ok(Some((meeting_name, event_name, start_time)))
                 }
