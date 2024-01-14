@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT tla, racing_number, team_name FROM driver_list",
+  "describe": {
+    "columns": [
+      {
+        "name": "tla",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "racing_number",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "team_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3deeb58728a865aaeb1a4a1b3c76404a2685b036f38684a99ea9f69e839b996f"
+}
