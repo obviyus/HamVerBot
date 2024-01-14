@@ -45,6 +45,11 @@ jobs:
           mv target/aarch64-unknown-linux-musl/release/HamVerBot target/release/HamVerBot_arm64
           chmod +x target/release/HamVerBot_arm64
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
