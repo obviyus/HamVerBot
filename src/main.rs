@@ -2,6 +2,7 @@ use std::{env, sync::Arc};
 
 use ::futures::prelude::*;
 use ::irc::client::prelude::*;
+use chrono::{Datelike, Utc};
 
 use log::{error, info, warn};
 use sqlx::SqlitePool;
@@ -45,11 +46,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Perform SASL authentication
     irc::authenticate(&bot_config.nickname, &bot_config.password, &irc_client)?;
 
-    // Fetch driver list before anything else
+    // Fetch driver list and refresh calendar before anything else
     match fetch::read_current_event().await {
         Ok((path, _)) => {
+            let previous_year = Utc::now().year() - 1;
+
             fetch::fetch_driver_list(&path, &pool).await?;
-            fetch::refresh_current_calendar(&pool).await?;
+            fetch::refresh_current_calendar(&pool, Some(previous_year)).await?;
+            fetch::refresh_current_calendar(&pool, None).await?;
         }
         Err(e) => {
             error!("Failed to fetch driver list: {:?}", e);
@@ -68,6 +72,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Running result worker...");
 
             Box::pin(async move {
+                if tx.send(JobType::CalendarRefresh).await.is_err() {
+                    warn!("Receiver dropped, cannot send CalendarRefresh job");
+                }
                 if tx.send(JobType::Result).await.is_err() {
                     warn!("Receiver dropped, cannot send Result job");
                 }

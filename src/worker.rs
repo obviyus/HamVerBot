@@ -7,7 +7,11 @@ use log::info;
 use serde::ser::StdError;
 use sqlx::SqlitePool;
 
-use crate::{database::is_event_delivered, fetch, irc::broadcast};
+use crate::{
+    database::is_event_delivered,
+    fetch::{self, refresh_current_calendar},
+    irc::broadcast,
+};
 
 #[derive(Debug)]
 pub enum JobType {
@@ -15,6 +19,7 @@ pub enum JobType {
     Alert,
     Wcc,
     Wdc,
+    CalendarRefresh,
 }
 
 pub async fn process_job(
@@ -27,6 +32,7 @@ pub async fn process_job(
         JobType::Alert => Ok(Box::new(alert_worker(&*pool, sender).await?)),
         JobType::Wdc => Ok(Box::new(fetch_wdc_standings(&*pool).await?)),
         JobType::Wcc => Ok(Box::new(fetch_wcc_standings(&*pool).await?)),
+        JobType::CalendarRefresh => Ok(Box::new(refresh_current_calendar(&*pool, None).await?)),
     }
 }
 
