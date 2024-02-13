@@ -64,7 +64,7 @@ async fn alert_worker(
     pool: &SqlitePool,
     sender: &Sender,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match fetch::fetch_next_event().await {
+    match fetch::fetch_next_event(pool).await {
         Ok(event) => {
             if let Some(formatted_string) = event {
                 broadcast(&formatted_string, pool, sender).await?;
