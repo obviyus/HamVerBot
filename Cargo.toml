@@ -17,18 +17,18 @@ irc = { version = "0.15.0", default-features = false, features = [
 ] }
 log = "0.4.20"
 base64 = "0.21.7"
-chrono = "0.4.31"
+chrono = "0.4.34"
 dotenv = "0.15.0"
-env_logger = "0.10.1"
+env_logger = "0.10.2"
 futures = "0.3.30"
-reqwest = { version = "0.11.23", default-features = false, features = [
+reqwest = { version = "0.11.24", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
-serde = { version = "1.0.195", features = ["derive"] }
-serde_json = "1.0.111"
+serde = { version = "1.0.196", features = ["derive"] }
+serde_json = "1.0.113"
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio-rustls"] }
-tokio = { version = "1.35.1", features = ["full"] }
+tokio = { version = "1.36.0", features = ["full"] }
 tokio-cron-scheduler = "0.9.4"
 anyhow = "1.0.79"
 
