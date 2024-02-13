@@ -1,3 +1,10 @@
+# [0.12.0](https://github.com/obviyus/HamVerBot/compare/v0.11.1...v0.12.0) (2024-02-13)
+
+
+### Features
+
+* **countdown:** fallback to DB if no event within 5 minutes ([c4492af](https://github.com/obviyus/HamVerBot/commit/c4492af590dd4b732360cd7a60f8514ba09eca39))
+
 ## [0.11.1](https://github.com/obviyus/HamVerBot/compare/v0.11.0...v0.11.1) (2024-01-14)
 
 
