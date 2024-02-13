@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{Datelike, Utc};
+use chrono::{Datelike, TimeZone, Utc};
 use std::{collections::HashMap, env};
 
 use log::debug;
@@ -7,7 +7,7 @@ use serde_json::Value;
 use sqlx::SqlitePool;
 
 use crate::{
-    database::EventType,
+    database::{EventType, next_event_filtered},
     models::{
         CalendarEvents, CurrentConstructorStandings, CurrentDriverStandings, DriverList,
         EventTracker, F1APIDriverStanding, SessionInfo, SessionResults,
@@ -45,7 +45,7 @@ fn parse_datetime(
 }
 
 // Fetch the next closest event from the F1 API
-pub async fn fetch_next_event() -> Result<Option<String>> {
+pub async fn fetch_next_event(pool: &SqlitePool) -> Result<Option<String>> {
     let data = fetch_json::<EventTracker>(
         F1_API_ENDPOINT,
         Some({
@@ -107,10 +107,62 @@ pub async fn fetch_next_event() -> Result<Option<String>> {
                     data.race.meeting_official_name, event.description
                 )))
             } else {
-                Ok(None)
+                match next_event_filtered(pool, None).await {
+                    Ok(event) => match event {
+                        Some((meeting_name, event_name, start_time)) => {
+                            let event_time = Utc
+                                .timestamp_opt(start_time, 0)
+                                .single()
+                                .ok_or("Invalid timestamp")
+                                .unwrap();
+
+                            if event_time
+                                .signed_duration_since(chrono::Utc::now())
+                                .num_minutes()
+                                <= 5
+                            {
+                                Ok(Some(format!(
+                                    "🏎️ \x02{}: {}\x02 begins in 5 minutes.",
+                                    meeting_name,
+                                    event_name.to_str()
+                                )))
+                            } else {
+                                Ok(None)
+                            }
+                        }
+                        None => Ok(None),
+                    },
+                    Err(_) => Ok(None),
+                }
             }
         }
-        None => Ok(None),
+        None => match next_event_filtered(pool, None).await {
+            Ok(event) => match event {
+                Some((meeting_name, event_name, start_time)) => {
+                    let event_time = Utc
+                        .timestamp_opt(start_time, 0)
+                        .single()
+                        .ok_or("Invalid timestamp")
+                        .unwrap();
+
+                    if event_time
+                        .signed_duration_since(chrono::Utc::now())
+                        .num_minutes()
+                        <= 5
+                    {
+                        Ok(Some(format!(
+                            "🏎️ \x02{}: {}\x02 begins in 5 minutes.",
+                            meeting_name,
+                            event_name.to_str()
+                        )))
+                    } else {
+                        Ok(None)
+                    }
+                }
+                None => Ok(None),
+            },
+            Err(_) => Ok(None),
+        },
     }
 }
 
@@ -423,7 +475,7 @@ pub async fn return_wcc_standings(pool: &SqlitePool) -> Result<String> {
 pub async fn refresh_current_calendar(pool: &SqlitePool, year: Option<i32>) -> Result<()> {
     let event_year = match year {
         Some(year) => year,
-        None => Utc::now().year()
+        None => Utc::now().year(),
     };
 
     let calendar_events = fetch_json::<CalendarEvents>(
@@ -440,8 +492,10 @@ pub async fn refresh_current_calendar(pool: &SqlitePool, year: Option<i32>) -> R
     for race in calendar_events.races {
         for (key, value) in race.sessions.iter() {
             if let Some(event_type) = EventType::from_str(key) {
-                println!("attempting to parse: {}", value);
-                let event_start_time = chrono::DateTime::parse_from_str(format!("{} +00:00", &value).as_str(), "%Y-%m-%dT%H:%M:%SZ %z");
+                let event_start_time = chrono::DateTime::parse_from_str(
+                    format!("{} +00:00", &value).as_str(),
+                    "%Y-%m-%dT%H:%M:%SZ %z",
+                );
                 match event_start_time {
                     Ok(event_start_time) => {
                         let meeting_name = format!(

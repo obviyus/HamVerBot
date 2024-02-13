@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Scheduling workers...");
     scheduler
-        .add(Job::new_async("1/10 * * * * *", move |_, _| {
+        .add(Job::new_async("* 1/5 * * * *", move |_, _| {
             let tx = tx.clone();
             info!("Running result worker...");
 
