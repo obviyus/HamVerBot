@@ -5,23 +5,14 @@ RUN USER=root cargo new app
 WORKDIR /usr/src/app
 COPY Cargo.toml Cargo.lock ./
 
-# Needs at least a main.rs file with a main function
 RUN mkdir src && echo "fn main(){}" > src/main.rs
 
-# Will build all dependent crates in release mode
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-  --mount=type=cache,target=/usr/src/app/target \
-  cargo build --release
+RUN cargo build --release
 
-# Copy the rest
 COPY . .
 
-# Build (install) the actual binaries
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-  --mount=type=cache,target=/usr/src/app/target \
-  cargo build --release
+RUN cargo build --release
 
-# Runtime image
 FROM debian:bullseye-slim
 
 RUN apt-get update && apt-get install -y \
@@ -29,11 +20,10 @@ RUN apt-get update && apt-get install -y \
     libgcc1 \
     libstdc++6
 
-# Run as "app" user
 RUN useradd -ms /bin/bash app
-
 USER app
 WORKDIR /app
 
-# Get compiled binaries from builder's cargo install directory
-COPY --from=builder /usr/local/cargo/bin/HamVerBot /app/HamVerBot
+COPY --from=builder /usr/src/app/target/release/HamVerBot .
+
+CMD ["./HamVerBot"]
