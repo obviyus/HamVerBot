@@ -92,7 +92,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ghcr.io/obviyus/superseriousbot:${{ github.sha }}
-            ghcr.io/obviyus/superseriousbot:latest
+            ghcr.io/obviyus/hamverbot:${{ github.sha }}
+            ghcr.io/obviyus/hamverbot:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
