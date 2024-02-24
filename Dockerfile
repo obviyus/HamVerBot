@@ -19,10 +19,15 @@ COPY . .
 # Build (install) the actual binaries
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
   --mount=type=cache,target=/usr/src/app/target \
-  cargo install --path .
+  cargo build --release
 
 # Runtime image
 FROM debian:bullseye-slim
+
+RUN apt-get update && apt-get install -y \
+    libc6 \
+    libgcc1 \
+    libstdc++6
 
 # Run as "app" user
 RUN useradd -ms /bin/bash app
@@ -32,6 +37,3 @@ WORKDIR /app
 
 # Get compiled binaries from builder's cargo install directory
 COPY --from=builder /usr/local/cargo/bin/HamVerBot /app/HamVerBot
-
-# Copy the config (workaround!)
-COPY config.toml /app/config.toml
