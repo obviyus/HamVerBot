@@ -5,7 +5,7 @@ use ::irc::client::prelude::*;
 use chrono::{Datelike, Utc};
 
 use log::{error, info, warn};
-use sqlx::SqlitePool;
+use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use tokio::sync::mpsc;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
@@ -30,10 +30,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let pool = SqlitePool::connect(
-        &env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:HamVerBot.db".to_string()),
-    )
-    .await?;
+    let database_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "sqlite:HamVerBot.db".to_string());
+
+    let options = SqliteConnectOptions::new()
+        .filename(&database_url)
+        .create_if_missing(true); 
+
+    let pool = SqlitePool::connect_with(options).await?;
 
     // Run migrations
     sqlx::migrate!().run(&pool).await?;
