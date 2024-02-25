@@ -1,3 +1,10 @@
+## [0.12.1](https://github.com/obviyus/HamVerBot/compare/v0.12.0...v0.12.1) (2024-02-25)
+
+
+### Bug Fixes
+
+* **sqlite:** create DB if missing ([a2913a1](https://github.com/obviyus/HamVerBot/commit/a2913a1c1b504d0f113b5b46a64f438d5b9d91d2))
+
 # [0.12.0](https://github.com/obviyus/HamVerBot/compare/v0.11.1...v0.12.0) (2024-02-13)
 
 
