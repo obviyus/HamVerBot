@@ -33,6 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "sqlite:HamVerBot.db".to_string());
 
+    info!("Connecting to SQLite DB at {}", database_url);
     let options = SqliteConnectOptions::new()
         .filename(&database_url)
         .create_if_missing(true); 
