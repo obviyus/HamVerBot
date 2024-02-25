@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build HamVerBot
+    name: Build Binaries
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -56,6 +56,7 @@ jobs:
           npm i -g semantic-release @semantic-release/changelog @semantic-release/git
           semantic-release
   publish:
+    name: Publish Docker Image
     runs-on: ubuntu-latest
     permissions:
       packages: write
