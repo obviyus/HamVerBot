@@ -57,11 +57,16 @@ pub async fn load_config() -> Result<HamVerBotConfig, Box<dyn std::error::Error>
         .deref()
         .to_string();
 
+    let password = match std::env::var("IRC_PASSWORD") {
+        Ok(val) => val,
+        Err(_) => config.password().to_string(),
+    };
+
     Ok(HamVerBotConfig {
         irc: config.clone(),
         command_prefix,
         nickname: config.nickname()?.to_string(),
-        password: config.password().to_string(),
+        password,
     })
 }
 
