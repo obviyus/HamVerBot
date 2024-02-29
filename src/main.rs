@@ -30,13 +30,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let database_url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite:HamVerBot.db".to_string());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "./HamVerBot.db".to_string());
 
     info!("Connecting to SQLite DB at {}", database_url);
     let options = SqliteConnectOptions::new()
         .filename(&database_url)
-        .create_if_missing(true); 
+        .create_if_missing(true);
 
     let pool = SqlitePool::connect_with(options).await?;
 
@@ -56,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok((path, _)) => {
             let previous_year = Utc::now().year() - 1;
 
-            fetch::fetch_driver_list(&path, &pool).await?;
+            // fetch::fetch_driver_list(&path, &pool).await?;
             fetch::refresh_current_calendar(&pool, Some(previous_year)).await?;
             fetch::refresh_current_calendar(&pool, None).await?;
         }
@@ -72,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Scheduling workers...");
     scheduler
-        .add(Job::new_async("* 1/5 * * * *", move |_, _| {
+        .add(Job::new_async("0 */5 * * * * *", move |_, _| {
             let tx = tx.clone();
             info!("Running result worker...");
 
