@@ -1,3 +1,10 @@
+## [0.13.1](https://github.com/obviyus/HamVerBot/compare/v0.13.0...v0.13.1) (2024-02-29)
+
+
+### Bug Fixes
+
+* **cron:** make cron run every 5 minutes ([29ad9a7](https://github.com/obviyus/HamVerBot/commit/29ad9a791334f956cabbc0454bf8ac11ebfc6373))
+
 # [0.13.0](https://github.com/obviyus/HamVerBot/compare/v0.12.1...v0.13.0) (2024-02-26)
 
 
