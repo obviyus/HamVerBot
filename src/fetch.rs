@@ -97,11 +97,11 @@ pub async fn fetch_next_event(pool: &SqlitePool) -> Result<Option<String>> {
                     }
                 };
 
-            if closest_event_start_time
+            let time_to_event: i64 = closest_event_start_time
                 .signed_duration_since(chrono::Utc::now())
-                .num_minutes()
-                <= 5
-            {
+                .num_minutes();
+
+            if time_to_event > 0 && time_to_event <= 5 {
                 Ok(Some(format!(
                     "🏎️ \x02{}: {}\x02 begins in 5 minutes.",
                     data.race.meeting_official_name, event.description
