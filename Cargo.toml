@@ -15,7 +15,7 @@ irc = { version = "0.15.0", default-features = false, features = [
   "toml_config",
   "tls-rust",
 ] }
-log = "0.4.20"
+log = "0.4.21"
 base64 = "0.21.7"
 chrono = "0.4.34"
 dotenv = "0.15.0"
