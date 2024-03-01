@@ -1,3 +1,10 @@
+## [0.13.2](https://github.com/obviyus/HamVerBot/compare/v0.13.1...v0.13.2) (2024-03-01)
+
+
+### Bug Fixes
+
+* **alert:** check for > 0 ([e4452e7](https://github.com/obviyus/HamVerBot/commit/e4452e71a45bec467a1ce463a4ea9f151a7e1157))
+
 ## [0.13.1](https://github.com/obviyus/HamVerBot/compare/v0.13.0...v0.13.1) (2024-02-29)
 
 
