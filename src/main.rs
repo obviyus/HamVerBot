@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok((path, _)) => {
             let previous_year = Utc::now().year() - 1;
 
-            // fetch::fetch_driver_list(&path, &pool).await?;
+            fetch::fetch_driver_list(&path, &pool).await?;
             fetch::refresh_current_calendar(&pool, Some(previous_year)).await?;
             fetch::refresh_current_calendar(&pool, None).await?;
         }
@@ -119,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Command::AUTHENTICATE(_) => {
-                irc::handle_authenticate(&*bot_config.nickname, &*bot_config.password, &sender)
+                irc::handle_authenticate(&bot_config.nickname, &bot_config.password, &sender)
                     .await?;
             }
             Command::Response(code, _) => irc::handle_response(code, &sender).await?,
