@@ -28,11 +28,11 @@ pub async fn process_job(
     sender: &Sender,
 ) -> Result<Box<dyn Any + Send>, Box<dyn StdError>> {
     match job_type {
-        JobType::Result => Ok(Box::new(result_worker(&*pool, sender).await?)),
-        JobType::Alert => Ok(Box::new(alert_worker(&*pool, sender).await?)),
-        JobType::Wdc => Ok(Box::new(fetch_wdc_standings(&*pool).await?)),
-        JobType::Wcc => Ok(Box::new(fetch_wcc_standings(&*pool).await?)),
-        JobType::CalendarRefresh => Ok(Box::new(refresh_current_calendar(&*pool, None).await?)),
+        JobType::Result => Ok(Box::new(result_worker(pool, sender).await?)),
+        JobType::Alert => Ok(Box::new(alert_worker(pool, sender).await?)),
+        JobType::Wdc => Ok(Box::new(fetch_wdc_standings(pool).await?)),
+        JobType::Wcc => Ok(Box::new(fetch_wcc_standings(pool).await?)),
+        JobType::CalendarRefresh => Ok(Box::new(refresh_current_calendar(pool, None).await?)),
     }
 }
 
