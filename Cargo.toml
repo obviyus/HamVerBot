@@ -7,7 +7,6 @@ description = "Steward of #f1 on Libera.Chat"
 license = "MIT"
 repository = "https://github.com/obviyus/HamVerBot"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 irc = { version = "0.15.0", default-features = false, features = [
@@ -16,12 +15,12 @@ irc = { version = "0.15.0", default-features = false, features = [
   "tls-rust",
 ] }
 log = "0.4.21"
-base64 = "0.21.7"
-chrono = "0.4.34"
+base64 = "0.22.0"
+chrono = "0.4.35"
 dotenv = "0.15.0"
-env_logger = "0.10.2"
+env_logger = "0.11.3"
 futures = "0.3.30"
-reqwest = { version = "0.11.24", default-features = false, features = [
+reqwest = { version = "0.11.25", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
@@ -29,7 +28,7 @@ serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.114"
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio-rustls"] }
 tokio = { version = "1.36.0", features = ["full"] }
-tokio-cron-scheduler = "0.9.4"
+tokio-cron-scheduler = "0.10.0"
 anyhow = "1.0.80"
 
 # Defining bin here to make multi stage docker build work
