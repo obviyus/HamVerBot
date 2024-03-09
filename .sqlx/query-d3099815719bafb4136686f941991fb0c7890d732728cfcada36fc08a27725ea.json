@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT TRUE FROM results WHERE path = ?",
+  "query": "SELECT true FROM results WHERE path = ?",
   "describe": {
     "columns": [
       {
-        "name": "TRUE",
+        "name": "true",
         "ordinal": 0,
         "type_info": "Int"
       }
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "10355835f1463d02dc7f0dbb082ac95d72e03262c1f40e589ba25bdb34726810"
+  "hash": "d3099815719bafb4136686f941991fb0c7890d732728cfcada36fc08a27725ea"
 }
