@@ -2,12 +2,12 @@ use anyhow::Result;
 use chrono::{Datelike, TimeZone, Utc};
 use std::{collections::HashMap, env};
 
-use log::debug;
+use log::{debug, info};
 use serde_json::Value;
 use sqlx::SqlitePool;
 
 use crate::{
-    database::{EventType, next_event_filtered},
+    database::{next_event_filtered, EventType},
     models::{
         CalendarEvents, CurrentConstructorStandings, CurrentDriverStandings, DriverList,
         EventTracker, F1APIDriverStanding, SessionInfo, SessionResults,
@@ -40,6 +40,7 @@ fn parse_datetime(
     offset: &str,
 ) -> Result<chrono::DateTime<chrono::Utc>, chrono::ParseError> {
     let datetime_string = format!("{} {}", date, offset);
+    info!("Parsing datetime: {}", datetime_string);
     chrono::DateTime::parse_from_str(&datetime_string, "%Y-%m-%dT%H:%M:%S %z")
         .map(|dt| dt.with_timezone(&chrono::Utc)) // Convert to Utc for universal comparison
 }
@@ -86,6 +87,7 @@ pub async fn fetch_next_event(pool: &SqlitePool) -> Result<Option<String>> {
             start_time_a.cmp(&start_time_b)
         });
 
+    info!("Closest event: {:?}", closest_event);
     match closest_event {
         Some(event) => {
             let closest_event_start_time =
@@ -100,6 +102,7 @@ pub async fn fetch_next_event(pool: &SqlitePool) -> Result<Option<String>> {
             let time_to_event: i64 = closest_event_start_time
                 .signed_duration_since(chrono::Utc::now())
                 .num_minutes();
+            info!("Time to event: {} minutes", time_to_event);
 
             if time_to_event > 0 && time_to_event <= 5 {
                 Ok(Some(format!(
@@ -107,33 +110,7 @@ pub async fn fetch_next_event(pool: &SqlitePool) -> Result<Option<String>> {
                     data.race.meeting_official_name, event.description
                 )))
             } else {
-                match next_event_filtered(pool, None).await {
-                    Ok(event) => match event {
-                        Some((meeting_name, event_name, start_time)) => {
-                            let event_time = Utc
-                                .timestamp_opt(start_time, 0)
-                                .single()
-                                .ok_or("Invalid timestamp")
-                                .unwrap();
-
-                            if event_time
-                                .signed_duration_since(chrono::Utc::now())
-                                .num_minutes()
-                                <= 5
-                            {
-                                Ok(Some(format!(
-                                    "🏎️ \x02{}: {}\x02 begins in 5 minutes.",
-                                    meeting_name,
-                                    event_name.to_str()
-                                )))
-                            } else {
-                                Ok(None)
-                            }
-                        }
-                        None => Ok(None),
-                    },
-                    Err(_) => Ok(None),
-                }
+                Ok(None)
             }
         }
         None => match next_event_filtered(pool, None).await {
@@ -145,11 +122,12 @@ pub async fn fetch_next_event(pool: &SqlitePool) -> Result<Option<String>> {
                         .ok_or("Invalid timestamp")
                         .unwrap();
 
-                    if event_time
+                    let time_to_event: i64 = event_time
                         .signed_duration_since(chrono::Utc::now())
-                        .num_minutes()
-                        <= 5
-                    {
+                        .num_minutes();
+                    info!("Time to DB event: {} minutes", time_to_event);
+
+                    if time_to_event > 0 && time_to_event <= 5 {
                         Ok(Some(format!(
                             "🏎️ \x02{}: {}\x02 begins in 5 minutes.",
                             meeting_name,
@@ -167,85 +145,99 @@ pub async fn fetch_next_event(pool: &SqlitePool) -> Result<Option<String>> {
 }
 
 pub async fn fetch_driver_list(path: &str, pool: &SqlitePool) -> Result<()> {
-    let response: HashMap<String, Value> = fetch_json(
-        format!("{}/{}DriverList.json", F1_SESSION_ENDPOINT, path).as_str(),
-        None,
-    )
-    .await
-    .unwrap();
+    let driver_list_path = format!("{}/{}DriverList.json", F1_SESSION_ENDPOINT, path);
+    info!("Fetching driver list for {}", driver_list_path);
+    let response_result: Result<HashMap<String, Value>, _> =
+        fetch_json(driver_list_path.as_str(), None).await;
 
-    for driver_value in response.values() {
-        let driver: DriverList = serde_json::from_value(driver_value.clone())?;
-        sqlx::query!("INSERT INTO driver_list (racing_number, reference, first_name, last_name, full_name, broadcast_name, tla, country_code, team_name, team_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (racing_number) DO UPDATE SET reference = ?, first_name = ?, last_name = ?, full_name = ?, broadcast_name = ?, tla = ?, country_code = ?, team_name = ?, team_color = ?",
-            driver.racing_number,
-            driver.reference,
-            driver.first_name,
-            driver.last_name,
-            driver.full_name,
-            driver.broadcast_name,
-            driver.tla,
-            driver.country_code,
-            driver.team_name,
-            driver.team_color,
-            driver.reference,
-            driver.first_name,
-            driver.last_name,
-            driver.full_name,
-            driver.broadcast_name,
-            driver.tla,
-            driver.country_code,
-            driver.team_name,
-            driver.team_color,
-        ).execute(pool).await?;
-    }
+    match response_result {
+        Ok(response) => {
+            for driver_value in response.values() {
+                let driver: DriverList = serde_json::from_value(driver_value.clone())?;
+                sqlx::query!("INSERT INTO driver_list (racing_number, reference, first_name, last_name, full_name, broadcast_name, tla, country_code, team_name, team_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (racing_number) DO UPDATE SET reference = ?, first_name = ?, last_name = ?, full_name = ?, broadcast_name = ?, tla = ?, country_code = ?, team_name = ?, team_color = ?",
+                    driver.racing_number,
+                    driver.reference,
+                    driver.first_name,
+                    driver.last_name,
+                    driver.full_name,
+                    driver.broadcast_name,
+                    driver.tla,
+                    driver.country_code,
+                    driver.team_name,
+                    driver.team_color,
+                    driver.reference,
+                    driver.first_name,
+                    driver.last_name,
+                    driver.full_name,
+                    driver.broadcast_name,
+                    driver.tla,
+                    driver.country_code,
+                    driver.team_name,
+                    driver.team_color,
+                ).execute(pool).await?;
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to fetch driver list: {}", e);
+            return Ok(());
+        }
+    };
 
     Ok(())
+}
+
+#[derive(Debug)]
+struct EssentialDriverData {
+    position: String,
+    racing_number: String,
+    best_lap_time: String,
+    interval_to_position_ahead: Option<String>,
 }
 
 async fn extract_position_and_number(
     data: HashMap<String, Value>,
     pool: &SqlitePool,
 ) -> Result<Vec<F1APIDriverStanding>> {
-    #[derive(Debug)]
-    struct DriverData {
-        position: String,
-        racing_number: String,
-        last_lap_time: String,
-        interval_to_position_ahead: String,
-    }
-
     if let Some(Value::Object(lines)) = data.get("Lines") {
-        let mut extracted_data: Vec<DriverData> = Vec::new();
+        let mut extracted_data: Vec<EssentialDriverData> = Vec::new();
 
         for (_, driver_data) in lines.iter() {
-            if let (
-                Some(position),
-                Some(racing_number),
-                Some(last_lap_time),
-                Some(interval_to_position_ahead),
-            ) = (
-                driver_data.get("Position").and_then(|v| v.as_str()),
-                driver_data.get("RacingNumber").and_then(|v| v.as_str()),
-                driver_data
-                    .get("LastLapTime")
-                    .and_then(|v| v.get("Value"))
-                    .and_then(|v| v.as_str()),
-                driver_data
-                    .get("IntervalToPositionAhead")
-                    .and_then(|v| v.get("Value"))
-                    .and_then(|v| v.as_str()),
-            ) {
-                let current_driver_data = DriverData {
-                    position: position.to_string(),
-                    racing_number: racing_number.to_string(),
-                    last_lap_time: last_lap_time.to_string(),
-                    interval_to_position_ahead: interval_to_position_ahead.to_string(),
-                };
+            let position = driver_data["Position"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            let racing_number = driver_data["RacingNumber"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            let best_lap_time = driver_data
+                .get("BestLapTime")
+                .and_then(|v| v.get("Value"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_default();
 
-                extracted_data.push(current_driver_data);
-            } else {
-                println!("Missing or invalid data for a driver: {:?}", driver_data);
-            }
+            // Extracting interval to position ahead, which is optional and more complex
+            let interval_to_position_ahead = driver_data
+                .get("Stats")
+                .and_then(|v| v.as_array())
+                .and_then(|stats| {
+                    stats.iter().find_map(|stat| {
+                        stat.get("TimeDifftoPositionAhead")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+                });
+
+            // Construct EssentialDriverData with the extracted information
+            let current_driver_data = EssentialDriverData {
+                position,
+                racing_number,
+                best_lap_time,
+                interval_to_position_ahead,
+            };
+
+            extracted_data.push(current_driver_data);
         }
 
         // Get driver TLA from driver list by racing number
@@ -263,15 +255,15 @@ async fn extract_position_and_number(
                     .iter()
                     .find(|driver| {
                         driver.racing_number
-                            == i64::from_str_radix(&data.racing_number, 10).unwrap()
+                            == data.racing_number.parse::<i64>().unwrap()
                     })
                     .unwrap();
 
                 F1APIDriverStanding {
-                    position: i8::from_str_radix(&data.position, 10).unwrap(),
+                    position: data.position.parse::<i8>().unwrap(),
                     driver_name: driver.tla.clone(),
                     team_name: driver.team_name.clone(),
-                    time: data.last_lap_time.clone(),
+                    time: data.best_lap_time.clone(),
                     difference: data.interval_to_position_ahead.clone(),
                 }
             })
@@ -293,10 +285,12 @@ pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
         .fetch_optional(pool)
         .await?;
 
-    let session_result: SessionResults;
+    let mut session_result: SessionResults;
 
     match result {
         Some(previous_result) => {
+            info!("Using cached results for {}", path);
+            info!("Previous result: {}", previous_result.data);
             session_result = serde_json::from_str(&previous_result.data).unwrap();
         }
         None => {
@@ -309,7 +303,7 @@ pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
             .unwrap();
 
             debug!("Fetching SessionInfo for {}", path);
-            let session_info = fetch_json::<SessionInfo>(
+            let session_info: SessionInfo = fetch_json::<SessionInfo>(
                 format!("{}/{}", F1_SESSION_ENDPOINT, "SessionInfo.json").as_str(),
                 None,
             )
@@ -336,7 +330,11 @@ pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
 
     let mut output = format!("🏎️ \x02{} Results\x02:", session_result.title,);
 
-    // Consider only the first 10 drivers to avoid spamming
+    // Consider only the first 10 drivers sorted by the key "position" to avoid spamming
+    session_result
+        .standings
+        .sort_by_key(|standing| standing.position);
+
     for standing in session_result.standings.iter().take(10) {
         output.push_str(&format!(
             " {}. {} - \x0303[{}]\x03",
@@ -490,13 +488,16 @@ pub async fn refresh_current_calendar(pool: &SqlitePool, year: Option<i32>) -> R
     .unwrap();
 
     for race in calendar_events.races {
-        for (key, value) in race.sessions.iter() {
+        for (key, datetime_str) in race.sessions.iter() {
             if let Some(event_type) = EventType::from_str(key) {
-                let event_start_time = chrono::DateTime::parse_from_str(
-                    format!("{} +00:00", &value).as_str(),
-                    "%Y-%m-%dT%H:%M:%SZ %z",
-                );
-                match event_start_time {
+                let datetime_str_with_millis =
+                    if datetime_str.ends_with('Z') && !datetime_str.contains(".000Z") {
+                        datetime_str.replace('Z', ".000Z")
+                    } else {
+                        datetime_str.to_string()
+                    };
+
+                match Utc.datetime_from_str(&datetime_str_with_millis, "%Y-%m-%dT%H:%M:%S%.3fZ") {
                     Ok(event_start_time) => {
                         let meeting_name = format!(
                             "{} FORMULA 1 {} GRAND PRIX {}",
@@ -504,6 +505,8 @@ pub async fn refresh_current_calendar(pool: &SqlitePool, year: Option<i32>) -> R
                             race.name.to_uppercase(),
                             event_year
                         );
+                        info!("{} -> {}", key, event_type.to_str());
+                        info!("Inserting event: {}", meeting_name);
 
                         let slug = format!("{}-{}-{}", event_year, race.slug, key);
                         let event_type_id = event_type as i64;
@@ -519,9 +522,11 @@ pub async fn refresh_current_calendar(pool: &SqlitePool, year: Option<i32>) -> R
                         ).execute(pool).await?;
                     }
                     Err(error) => {
-                        eprintln!("{}", error)
+                        eprintln!("Can't parse date: {}: {}", &datetime_str, error)
                     }
                 }
+            } else {
+                eprintln!("Unknown event type: {}", key);
             }
         }
     }

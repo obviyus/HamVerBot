@@ -123,7 +123,7 @@ pub struct F1APIDriverStanding {
     pub driver_name: String,
     pub team_name: String,
     pub time: String,
-    pub difference: String,
+    pub difference: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
