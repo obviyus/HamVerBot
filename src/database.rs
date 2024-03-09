@@ -8,6 +8,7 @@ pub enum EventType {
     Qualifying = 5,
     Sprint = 6,
     Race = 7,
+    SprintQualifying = 8,
 }
 
 impl EventType {
@@ -18,6 +19,7 @@ impl EventType {
             "practice 2" | "p2" | "fp2" => Some(EventType::FreePractice2),
             "practice 3" | "p3" | "fp3" => Some(EventType::FreePractice3),
             "qualifying" | "quali" | "q" => Some(EventType::Qualifying),
+            "sprint qualifying" | "sq" | "sprint_qualifying" => Some(EventType::SprintQualifying),
             "sprint" | "s" => Some(EventType::Sprint),
             "race" | "r" | "gp" => Some(EventType::Race),
             _ => None,
@@ -28,7 +30,7 @@ impl EventType {
         match self {
             EventType::LiveryReveal => "",
             EventType::FreePractice1 | EventType::FreePractice2 | EventType::FreePractice3 => "🏎️",
-            EventType::Qualifying => "⏱️",
+            EventType::Qualifying | EventType::SprintQualifying => "⏱️",
             EventType::Sprint => "🏎",
             EventType::Race => "🏁",
         }
@@ -41,6 +43,7 @@ impl EventType {
             EventType::FreePractice2 => "Practice 2",
             EventType::FreePractice3 => "Practice 3",
             EventType::Qualifying => "Qualifying",
+            EventType::SprintQualifying => "Sprint Qualifying",
             EventType::Sprint => "Sprint",
             EventType::Race => "Race",
         }
@@ -55,6 +58,7 @@ impl EventType {
             5 => EventType::Qualifying,
             6 => EventType::Sprint,
             7 => EventType::Race,
+            8 => EventType::SprintQualifying,
             _ => panic!("Invalid event type"),
         }
     }
@@ -64,7 +68,7 @@ pub async fn is_event_delivered(
     pool: &SqlitePool,
     path: &str,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    let result = sqlx::query!("SELECT TRUE FROM results WHERE path = ?", path)
+    let result = sqlx::query!("SELECT true FROM results WHERE path = ?", path)
         .fetch_optional(pool)
         .await?;
 
