@@ -1,3 +1,18 @@
+# [0.14.0](https://github.com/obviyus/HamVerBot/compare/v0.13.2...v0.14.0) (2024-03-09)
+
+
+### Bug Fixes
+
+* **db:** support Sprint Qualifying event ([fe124c2](https://github.com/obviyus/HamVerBot/commit/fe124c2e6edaa9032f12d8933dc9370c92f80ba8))
+* **driver:** handle missing data in driver list ([5ddd3ef](https://github.com/obviyus/HamVerBot/commit/5ddd3efd066f478ee353faf03580196edaec5e21))
+* **sqlx:** re-add cached query ([479c9d9](https://github.com/obviyus/HamVerBot/commit/479c9d9d459341e30b0e374e6853352ca3f8886e))
+* **worker:** remove unn-necessary deref ([9b6b63e](https://github.com/obviyus/HamVerBot/commit/9b6b63e0fea4133cf69fc8a19708bca5e19fb78e))
+
+
+### Features
+
+* **db:** support sq ([71f2ac5](https://github.com/obviyus/HamVerBot/commit/71f2ac515967b82157f72e66add94857cbc34464))
+
 ## [0.13.2](https://github.com/obviyus/HamVerBot/compare/v0.13.1...v0.13.2) (2024-03-01)
 
 
