@@ -29,7 +29,7 @@ pub async fn fetch_json<T: serde::de::DeserializeOwned>(
         request = request.headers(headers);
     }
 
-    let body = request.send().await?.text_with_charset("utf-8-sig").await?;
+    let body = request.send().await?.text().await?;
     let data: T = serde_json::from_str(body.trim_start_matches('\u{feff}'))?;
 
     Ok(data)
@@ -358,24 +358,29 @@ pub async fn read_current_event() -> Result<(String, bool)> {
 }
 
 pub async fn fetch_wdc_standings(pool: &SqlitePool) -> Result<CurrentDriverStandings> {
-    let standings = fetch_json::<CurrentDriverStandings>(
+    match fetch_json::<CurrentDriverStandings>(
         format!("{}/current/driverStandings.json", ERGAST_API_ENDPOINT).as_str(),
         None,
     )
-    .await
-    .unwrap();
+    .await {
+        Ok(standings) => {
+            let json_standings = serde_json::to_string(&standings)?;
 
-    let json_standings = serde_json::to_string(&standings)?;
+            sqlx::query!(
+                "INSERT INTO championship_standings (data, type) VALUES (?, 0) ON CONFLICT (type) DO UPDATE SET data = ?, create_time = CURRENT_TIMESTAMP",
+                json_standings,
+                json_standings
+            )
+            .execute(pool)
+            .await?;
 
-    sqlx::query!(
-        "INSERT INTO championship_standings (data, type) VALUES (?, 0) ON CONFLICT (type) DO UPDATE SET data = ?, create_time = CURRENT_TIMESTAMP",
-        json_standings,
-        json_standings
-    )
-    .execute(pool)
-    .await?;
-
-    Ok(standings)
+            Ok(standings)
+        }
+        Err(e) => {
+            eprintln!("Failed to fetch WDC standings: {}", e);
+            Err(e)
+        }
+    }
 }
 
 // Get current WDC standings
@@ -414,24 +419,29 @@ pub async fn return_wdc_standings(pool: &SqlitePool) -> Result<String> {
 }
 
 pub async fn fetch_wcc_standings(pool: &SqlitePool) -> Result<CurrentConstructorStandings> {
-    let standings = fetch_json::<CurrentConstructorStandings>(
+    match fetch_json::<CurrentConstructorStandings>(
         format!("{}/current/constructorStandings.json", ERGAST_API_ENDPOINT).as_str(),
         None,
     )
-    .await
-    .unwrap();
+    .await {
+        Ok(standings) => {
+            let json_standings = serde_json::to_string(&standings)?;
 
-    let json_standings = serde_json::to_string(&standings)?;
+            sqlx::query!(
+                "INSERT INTO championship_standings (data, type) VALUES (?, 1) ON CONFLICT (type) DO UPDATE SET data = ?, create_time = CURRENT_TIMESTAMP",
+                json_standings,
+                json_standings
+            )
+            .execute(pool)
+            .await?;
 
-    sqlx::query!(
-        "INSERT INTO championship_standings (data, type) VALUES (?, 1) ON CONFLICT (type) DO UPDATE SET data = ?, create_time = CURRENT_TIMESTAMP",
-        json_standings,
-        json_standings,
-    )
-    .execute(pool)
-    .await?;
-
-    Ok(standings)
+            Ok(standings)
+        }
+        Err(e) => {
+            eprintln!("Failed to fetch WCC standings: {}", e);
+            Err(e)
+        }
+    }
 }
 
 // Get the current WCC standings
