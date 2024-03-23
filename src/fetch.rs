@@ -313,7 +313,10 @@ pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
             let standings = extract_position_and_number(session, pool).await?;
 
             session_result = SessionResults {
-                title: session_info.meeting.official_name,
+                title: format!(
+                    "{} {}",
+                    session_info.meeting.official_name, session_info.name
+                ),
                 standings,
             };
 
