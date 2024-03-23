@@ -1,3 +1,10 @@
+## [0.14.1](https://github.com/obviyus/HamVerBot/compare/v0.14.0...v0.14.1) (2024-03-23)
+
+
+### Bug Fixes
+
+* **results:** include meeting name in results ([2281c2c](https://github.com/obviyus/HamVerBot/commit/2281c2cee4c7ca985f097f5b963718fb79d2340f))
+
 # [0.14.0](https://github.com/obviyus/HamVerBot/compare/v0.13.2...v0.14.0) (2024-03-09)
 
 
