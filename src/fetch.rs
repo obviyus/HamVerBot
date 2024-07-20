@@ -1,4 +1,6 @@
+use anyhow::Context;
 use anyhow::Result;
+use anyhow::anyhow;
 use chrono::{Datelike, TimeZone, Utc};
 use std::{collections::HashMap, env};
 
@@ -198,85 +200,71 @@ async fn extract_position_and_number(
     data: HashMap<String, Value>,
     pool: &SqlitePool,
 ) -> Result<Vec<F1APIDriverStanding>> {
-    if let Some(Value::Object(lines)) = data.get("Lines") {
-        let mut extracted_data: Vec<EssentialDriverData> = Vec::new();
+    let lines = data.get("Lines")
+        .and_then(Value::as_object)
+        .context("Failed to extract lines")?;
 
-        for (_, driver_data) in lines.iter() {
-            let position = driver_data["Position"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string();
-            let racing_number = driver_data["RacingNumber"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string();
+    let extracted_data: Vec<EssentialDriverData> = lines
+        .iter()
+        .map(|(_, driver_data)| {
+            let position = driver_data["Position"].as_str().unwrap_or_default().to_string();
+            let racing_number = driver_data["RacingNumber"].as_str().unwrap_or_default().to_string();
             let best_lap_time = driver_data
                 .get("BestLapTime")
                 .and_then(|v| v.get("Value"))
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .to_string();
 
-            // Extracting interval to position ahead, which is optional and more complex
             let interval_to_position_ahead = driver_data
                 .get("Stats")
-                .and_then(|v| v.as_array())
+                .and_then(Value::as_array)
                 .and_then(|stats| {
                     stats.iter().find_map(|stat| {
                         stat.get("TimeDifftoPositionAhead")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string())
+                            .and_then(Value::as_str)
+                            .map(String::from)
                     })
                 });
 
-            // Construct EssentialDriverData with the extracted information
-            let current_driver_data = EssentialDriverData {
+            EssentialDriverData {
                 position,
                 racing_number,
                 best_lap_time,
                 interval_to_position_ahead,
-            };
+            }
+        })
+        .collect();
 
-            extracted_data.push(current_driver_data);
-        }
+    let driver_list = sqlx::query!("SELECT tla, racing_number, team_name FROM driver_list")
+        .fetch_all(pool)
+        .await?;
 
-        // Get driver TLA from driver list by racing number
-        let driver_list = sqlx::query!("SELECT tla, racing_number, team_name FROM driver_list")
-            .fetch_all(pool)
-            .await?;
+    debug!("Driver list: {:?}", driver_list);
+    debug!("Extracted data: {:?}", extracted_data);
 
-        debug!("Driver list: {:?}", driver_list);
-        debug!("Extracted data: {:?}", extracted_data);
+    extracted_data
+        .iter()
+        .map(|data| {
+            let driver = driver_list
+                .iter()
+                .find(|driver| {
+                    driver.racing_number == data.racing_number.parse::<i64>().unwrap_or(-1)
+                })
+                .ok_or_else(|| anyhow!("Driver not found for racing number: {}", data.racing_number))?;
 
-        let data_with_tla = extracted_data
-            .iter()
-            .map(|data| {
-                let driver = driver_list
-                    .iter()
-                    .find(|driver| {
-                        driver.racing_number
-                            == data.racing_number.parse::<i64>().unwrap()
-                    })
-                    .unwrap();
+            let position = data.position.parse::<i8>()
+                .map_err(|_| anyhow!("Invalid position: {}", data.position))?;
 
-                F1APIDriverStanding {
-                    position: data.position.parse::<i8>().unwrap(),
-                    driver_name: driver.tla.clone(),
-                    team_name: driver.team_name.clone(),
-                    time: data.best_lap_time.clone(),
-                    difference: data.interval_to_position_ahead.clone(),
-                }
+            Ok(F1APIDriverStanding {
+                position,
+                driver_name: driver.tla.clone(),
+                team_name: driver.team_name.clone(),
+                time: data.best_lap_time.clone(),
+                difference: data.interval_to_position_ahead.clone(),
             })
-            .collect::<Vec<F1APIDriverStanding>>();
-
-        Ok(data_with_tla)
-    } else {
-        Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Invalid data",
-        ))
-        .into())
-    }
+        })
+        .collect()
 }
 
 // Fetch results for a given path from the F1 API
@@ -285,13 +273,12 @@ pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
         .fetch_optional(pool)
         .await?;
 
-    let mut session_result: SessionResults;
-
-    match result {
+    let session_result = match result {
         Some(previous_result) => {
             info!("Using cached results for {}", path);
             info!("Previous result: {}", previous_result.data);
-            session_result = serde_json::from_str(&previous_result.data).unwrap();
+            serde_json::from_str(&previous_result.data)
+                .context("Failed to deserialize cached results")?
         }
         None => {
             debug!("Fetching TimingDataF1 for {}", path);
@@ -300,7 +287,7 @@ pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
                 None,
             )
             .await
-            .unwrap();
+            .context("Failed to fetch TimingDataF1")?;
 
             debug!("Fetching SessionInfo for {}", path);
             let session_info: SessionInfo = fetch_json::<SessionInfo>(
@@ -308,11 +295,13 @@ pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
                 None,
             )
             .await
-            .unwrap();
+            .context("Failed to fetch SessionInfo")?;
 
-            let standings = extract_position_and_number(session, pool).await?;
+            let standings = extract_position_and_number(session, pool)
+                .await
+                .context("Failed to extract position and number")?;
 
-            session_result = SessionResults {
+            let new_session_result = SessionResults {
                 title: format!(
                     "{} {}",
                     session_info.meeting.official_name, session_info.name
@@ -320,25 +309,28 @@ pub async fn fetch_results(pool: &SqlitePool, path: &str) -> Result<String> {
                 standings,
             };
 
-            let json_result = serde_json::to_string(&session_result)?;
+            let json_result = serde_json::to_string(&new_session_result)
+                .context("Failed to serialize new session result")?;
             sqlx::query!(
                 "INSERT INTO results (path, data, event_id) VALUES (?, ?, (SELECT id FROM events WHERE start_time < unixepoch() AND event_type_id != 1 ORDER BY start_time DESC LIMIT 1))",
                 path,
                 json_result
             )
             .execute(pool)
-            .await?;
-        }
-    }
+            .await
+            .context("Failed to insert new results into database")?;
 
-    let mut output = format!("🏎️ \x02{} Results\x02:", session_result.title,);
+            new_session_result
+        }
+    };
+
+    let mut output = format!("🏎️ \x02{} Results\x02:", session_result.title);
 
     // Consider only the first 10 drivers sorted by the key "position" to avoid spamming
-    session_result
-        .standings
-        .sort_by_key(|standing| standing.position);
+    let mut sorted_standings = session_result.standings;
+    sorted_standings.sort_by_key(|standing| standing.position);
 
-    for standing in session_result.standings.iter().take(10) {
+    for standing in sorted_standings.iter().take(10) {
         output.push_str(&format!(
             " {}. {} - \x0303[{}]\x03",
             standing.position, standing.driver_name, standing.time
