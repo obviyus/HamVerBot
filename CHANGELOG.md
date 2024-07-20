@@ -1,3 +1,10 @@
+## [0.14.2](https://github.com/obviyus/HamVerBot/compare/v0.14.1...v0.14.2) (2024-07-20)
+
+
+### Bug Fixes
+
+* **result:** handle unmatched driver keys ([089d8b2](https://github.com/obviyus/HamVerBot/commit/089d8b2b6c607a2460c5c6e3145229614a488463))
+
 ## [0.14.1](https://github.com/obviyus/HamVerBot/compare/v0.14.0...v0.14.1) (2024-03-23)
 
 
