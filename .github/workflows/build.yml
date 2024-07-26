@@ -45,7 +45,9 @@ jobs:
           file: ./Dockerfile
           push: true
           platforms: linux/amd64
-          tags: ghcr.io/obviyus/hamverbot:${{ github.sha }}
+          tags: |
+            ghcr.io/obviyus/hamverbot:${{ github.sha }}
+            ghcr.io/obviyus/hamverbot:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -73,27 +75,8 @@ jobs:
           file: ./Dockerfile
           push: true
           platforms: linux/arm64
-          tags: ghcr.io/obviyus/hamverbot:${{ github.sha }}
+          tags: |
+            ghcr.io/obviyus/hamverbot:${{ github.sha }}
+            ghcr.io/obviyus/hamverbot:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  create-manifest:
-    name: Create and Push Multi-Arch Manifest
-    needs: [publish-amd64, publish-arm64]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create and push manifest
-        run: |
-          docker manifest create ghcr.io/obviyus/hamverbot:latest \
-            ghcr.io/obviyus/hamverbot:${{ github.sha }}
-          docker manifest annotate ghcr.io/obviyus/hamverbot:latest \
-            ghcr.io/obviyus/hamverbot:${{ github.sha }} --arch amd64 --os linux
-          docker manifest annotate ghcr.io/obviyus/hamverbot:latest \
-            ghcr.io/obviyus/hamverbot:${{ github.sha }} --arch arm64 --os linux
-          docker manifest push ghcr.io/obviyus/hamverbot:latest
