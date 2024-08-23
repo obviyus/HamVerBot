@@ -6,75 +6,85 @@ on:
       - "master"
 
 jobs:
-  release:
-    name: Create Release
+  build:
+    name: Build Binaries
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
+      - name: Install latest rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          default: true
+          override: true
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build amd64
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all --release
+
+      - name: Prepare amd64 binary
+        run: |
+          mv target/release/HamVerBot target/release/HamVerBot_amd64
+          chmod +x target/release/HamVerBot_amd64
+
+      - name: Build arm64
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --all --release --target=aarch64-unknown-linux-musl
+
+      - name: Prepare arm64 Binary
+        run: |
+          mv target/aarch64-unknown-linux-musl/release/HamVerBot target/release/HamVerBot_arm64
+          chmod +x target/release/HamVerBot_arm64
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm i -g semantic-release @semantic-release/changelog @semantic-release/git
           semantic-release
-
-  publish-amd64:
-    name: Build and Publish AMD64 Docker Image
-    needs: release
+  publish:
+    name: Publish Docker Image
     runs-on: ubuntu-latest
     permissions:
       packages: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push AMD64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          platforms: linux/amd64
-          tags: |
-            ghcr.io/obviyus/hamverbot:${{ github.sha }}
-            ghcr.io/obviyus/hamverbot:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
-  publish-arm64:
-    name: Build and Publish ARM64 Docker Image
-    needs: release
-    runs-on: ubuntu-latest-arm64
-    permissions:
-      packages: write
-      contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        id: builder
+        uses: docker/setup-buildx-action@v1
+
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v1
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push ARM64
-        uses: docker/build-push-action@v5
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           file: ./Dockerfile
           push: true
-          platforms: linux/arm64
           tags: |
             ghcr.io/obviyus/hamverbot:${{ github.sha }}
             ghcr.io/obviyus/hamverbot:latest
