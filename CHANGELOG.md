@@ -1,3 +1,10 @@
+# [0.15.0](https://github.com/obviyus/HamVerBot/compare/v0.14.2...v0.15.0) (2024-11-03)
+
+
+### Features
+
+* support specifying TZ in commands ([5375592](https://github.com/obviyus/HamVerBot/commit/537559214471cbfbb408fe784a5101e104846bb2))
+
 ## [0.14.2](https://github.com/obviyus/HamVerBot/compare/v0.14.1...v0.14.2) (2024-07-20)
 
 
