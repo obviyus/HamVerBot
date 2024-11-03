@@ -1,13 +1,57 @@
-use chrono::{Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, FixedOffset, TimeZone, Utc};
 
 use irc::client::Sender;
-use log::trace;
+use log::{info, trace};
 use sqlx::SqlitePool;
+use std::str::FromStr;
 
 use crate::{
     database::{self, EventType},
     fetch,
 };
+
+#[derive(Debug)]
+struct TimezoneArg {
+    offset: FixedOffset,
+}
+
+impl TimezoneArg {
+    fn parse(arg: &str) -> Option<Self> {
+        // Early return for invalid prefixes
+        if !arg.starts_with("utc") && !arg.starts_with("gmt") {
+            return None;
+        }
+
+        // Handle UTC/GMT+0 case
+        let offset_str = &arg[3..];
+        if offset_str.is_empty() {
+            return Some(TimezoneArg {
+                offset: FixedOffset::east_opt(0).unwrap(),
+            });
+        }
+
+        // Parse sign and offset
+        let (sign, offset_str) = match offset_str.chars().next()? {
+            '+' => (1, &offset_str[1..]),
+            '-' => (-1, &offset_str[1..]),
+            _ => return None,
+        };
+
+        // Parse hours and optional minutes
+        let parts: Vec<&str> = offset_str.split(':').collect();
+        let seconds = match parts.as_slice() {
+            [hours] => i32::from_str(hours).ok()? * 3600,
+            [hours, minutes] => {
+                let h = i32::from_str(hours).ok()?;
+                let m = i32::from_str(minutes).ok()?;
+                h * 3600 + m * 60
+            }
+            _ => return None,
+        } * sign;
+
+        FixedOffset::east_opt(seconds).map(|offset| TimezoneArg { offset })
+    }
+}
 
 pub struct CommandHandler<'a> {
     sender: &'a Sender,
@@ -21,7 +65,7 @@ impl<'a> CommandHandler<'a> {
         Ok(())
     }
 
-    async fn handle_next(&self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn handle_next(&self, timezone: Option<&&str>) -> Result<(), Box<dyn std::error::Error>> {
         let (meeting_name, event_type, start_time) =
             match database::next_event_filtered(self.pool, None).await? {
                 Some(event) => event,
@@ -32,11 +76,14 @@ impl<'a> CommandHandler<'a> {
                 }
             };
 
+        let timezone = timezone.copied().and_then(TimezoneArg::parse);
+
         self.sender.send_privmsg(
             self.target,
             string_builder(
                 format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
                 start_time,
+                timezone.as_ref(),
             )?,
         )?;
 
@@ -92,11 +139,12 @@ impl<'a> CommandHandler<'a> {
     async fn handle_when(
         &self,
         event_type: Option<&&str>,
+        timezone: Option<&&str>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let event_type = match event_type {
-            Some(event_type) => EventType::from_str(event_type),
-            None => None,
-        };
+        let event_type = event_type.map(|&s| EventType::from_str(s)).flatten();
+        info!("timezone_arg={:?}", timezone);
+        let timezone = timezone.copied().and_then(TimezoneArg::parse);
+        info!("timezone_parsed={:?}", timezone);
 
         let (meeting_name, event_type, start_time) =
             match database::next_event_filtered(self.pool, event_type).await? {
@@ -113,10 +161,53 @@ impl<'a> CommandHandler<'a> {
             string_builder(
                 format!("{}: {}", meeting_name, event_type.to_str()).as_str(),
                 start_time,
+                timezone.as_ref(),
             )?,
         )?;
 
         Ok(())
+    }
+}
+
+fn string_builder(
+    event_name: &str,
+    event_time: i64,
+    timezone: Option<&TimezoneArg>,
+) -> Result<String, &'static str> {
+    let utc_time = Utc
+        .timestamp_opt(event_time, 0)
+        .single()
+        .ok_or("Invalid timestamp")?;
+
+    if let Some(tz) = timezone {
+        let local_time: DateTime<FixedOffset> = utc_time.with_timezone(&tz.offset);
+        let tz_str = if tz.offset.local_minus_utc() >= 0 {
+            format!(
+                "+{:02}:{:02}",
+                tz.offset.local_minus_utc() / 3600,
+                (tz.offset.local_minus_utc() % 3600) / 60
+            )
+        } else {
+            format!(
+                "-{:02}:{:02}",
+                (tz.offset.local_minus_utc() / 3600).abs(),
+                ((tz.offset.local_minus_utc() % 3600) / 60).abs()
+            )
+        };
+
+        Ok(format!(
+            "\x02{}\x02 starts at {} UTC{}",
+            event_name,
+            local_time.format("%H:%M"),
+            tz_str
+        ))
+    } else {
+        let time_left = utc_time - Utc::now();
+        let time_left_string = format_duration(time_left)?;
+        Ok(format!(
+            "\x02{}\x02 begins in {}",
+            event_name, time_left_string
+        ))
     }
 }
 
@@ -140,8 +231,15 @@ pub async fn handle_irc_message(
     if let Some(command) = commands.next() {
         match *command {
             "ping" => handler.handle_ping().await?,
-            "n" | "next" => handler.handle_next().await?,
-            "w" | "when" => handler.handle_when(commands.next()).await?,
+            "n" | "next" => {
+                let timezone = commands.next();
+                handler.handle_next(timezone).await?
+            }
+            "w" | "when" => {
+                let event_type = commands.next();
+                let timezone = commands.next();
+                handler.handle_when(event_type, timezone).await?
+            }
             "p" | "prev" => handler.handle_prev().await?,
             "d" | "drivers" => handler.handle_wdc().await?,
             "c" | "constructors" => handler.handle_wcc().await?,
@@ -178,18 +276,4 @@ fn format_duration(duration: Duration) -> Result<String, &'static str> {
     }
 
     Ok(duration_strings.join(" and "))
-}
-
-fn string_builder(event_name: &str, event_time: i64) -> Result<String, &'static str> {
-    let event_time = Utc
-        .timestamp_opt(event_time, 0)
-        .single()
-        .ok_or("Invalid timestamp")?;
-    let time_left = event_time - Utc::now();
-
-    let time_left_string = format_duration(time_left)?;
-    Ok(format!(
-        "\x02{}\x02 begins in {}.",
-        event_name, time_left_string
-    ))
 }
