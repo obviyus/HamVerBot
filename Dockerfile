@@ -1,30 +1,18 @@
-FROM rust:slim-bookworm as builder
+FROM oven/bun:1.1.26-slim
 
 WORKDIR /app
 
-RUN USER=root cargo new --bin HamVerBot
-WORKDIR /app/HamVerBot
+# Copy package files
+COPY package.json bun.lockb ./
 
-# Copy only the dependency manifests to cache dependencies
-COPY ./Cargo.toml ./Cargo.toml
+# Install dependencies
+RUN bun install --frozen-lockfile
 
-RUN cargo build --release
-
+# Copy source code
 COPY . .
 
-RUN cargo build --release
+# Install SQLite
+RUN apt-get update && apt-get install -y sqlite3 && rm -rf /var/lib/apt/lists/*
 
-FROM debian:bookworm-slim
-
-RUN apt-get update && apt-get install -y \
-    libsqlite3-dev \
-    # Install the sqlite3 command line tool for debugging
-    sqlite3 \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-COPY --from=builder /app/HamVerBot/target/release/HamVerBot .
-
-# Run the application
-CMD ["./HamVerBot"]
+# Set the entry point to run the application with bun start
+CMD ["bun", "start"]
