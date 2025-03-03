@@ -1,0 +1,22 @@
+{
+	"name": "hamverbot",
+	"module": "index.ts",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"start": "bun run src/index.ts"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	},
+	"dependencies": {
+		"cron": "^4.1.0",
+		"dotenv": "^16.4.7",
+		"irc-framework": "^4.14.0",
+		"node-ical": "^0.20.1"
+	}
+}
