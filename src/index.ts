@@ -1,6 +1,9 @@
 import { config as appConfig } from "~/config";
 import { getClient, initIrcClient } from "~/irc";
 import { scheduleJobs } from "~/worker";
+import { fetchF1Calendar } from "~/calendar";
+import { fetchDriverList, fetchResults } from "~/fetch";
+import { getLatestPath } from "~/database";
 
 async function main() {
 	const nickname = appConfig.irc.nickname;
@@ -14,6 +17,16 @@ async function main() {
 	}
 
 	console.log("Starting...");
+
+	// Fetch calendar at startup
+	await fetchF1Calendar();
+
+	// Fetch driver list at startup
+	const latestPath = await getLatestPath();
+	if (latestPath) {
+		await fetchDriverList(latestPath);
+		await fetchResults(latestPath);
+	}
 
 	// Register all cron jobs
 	scheduleJobs();

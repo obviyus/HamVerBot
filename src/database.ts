@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { readCurrentEvent } from "~/fetch";
 
 export enum EventType {
 	LiveryReveal = 1,
@@ -330,7 +331,7 @@ export function getNextEvent(
 }
 
 // Get the latest path
-export function getLatestPath(): string | null {
+export async function getLatestPath(): Promise<string | null> {
 	try {
 		const db = getDb();
 		const stmt = getPreparedStatement(
@@ -340,6 +341,13 @@ export function getLatestPath(): string | null {
 		);
 
 		const result = stmt.get() as { path: string } | null;
+		if (!result) {
+			const { path, isComplete } = await readCurrentEvent();
+			if (isComplete) {
+				return path;
+			}
+		}
+
 		return result ? result.path : null;
 	} catch (error) {
 		console.error(`Error getting latest path: ${error}`);
