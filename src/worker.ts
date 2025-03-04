@@ -5,10 +5,10 @@ import {
 	readCurrentEvent,
 	fetchResults,
 	fetchNextEvent,
-	refreshCurrentCalendar,
 } from "~/fetch";
 import { isEventDelivered } from "~/database";
 import { broadcast } from "~/irc";
+import { fetchF1Calendar } from "~/calendar";
 
 /**
  * Enum representing different job types
@@ -38,7 +38,7 @@ export async function processJob(jobType: JobType) {
 			case JobType.Wcc:
 				return await fetchWccStandings();
 			case JobType.CalendarRefresh:
-				return await refreshCurrentCalendar();
+				return await fetchF1Calendar();
 		}
 	} catch (error) {
 		console.error(`Error processing job ${jobType}:`, error);
