@@ -1,3 +1,11 @@
+# [1.1.0](https://github.com/obviyus/HamVerBot/compare/v1.0.0...v1.1.0) (2025-03-04)
+
+
+### Features
+
+* run fetch jobs at start ([4e592b6](https://github.com/obviyus/HamVerBot/commit/4e592b6cd059c5bd95a2e3d3957e9b505954e540))
+* use official F1 calendar ([494423f](https://github.com/obviyus/HamVerBot/commit/494423f1f3bfc7530c31cead977421a90b22b1a3))
+
 # 1.0.0 (2025-03-04)
 
 
