@@ -5,9 +5,7 @@ import {
 	storeChampionshipStandings,
 	getNextEvent,
 	EventType,
-	storeEvents,
 } from "~/database";
-import type { Event } from "~/database";
 import type {
 	Driver,
 	DriverStanding,
@@ -16,7 +14,6 @@ import type {
 	ConstructorMRData,
 	CurrentDriverStandings,
 	DriverMRData,
-	CalendarEvents,
 } from "~/types/models";
 
 // API endpoints
@@ -278,9 +275,14 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 	// Extract driver standings
 	const standings = await extractPositionAndTiming(timingData);
 
-	// Create session result
+	// Extract session type from path
+	const sessionKey = path.split("/").pop()?.split("_")[0].toLowerCase();
+	const eventType = sessionKey ? sessionKeyToEventType(sessionKey) : null;
+	const sessionName = eventType ? eventTypeToString(eventType) : "";
+
+	// Create session result with session type (using only OfficialName)
 	const sessionResult: SessionResults = {
-		title: `${sessionInfoResponse.Meeting.OfficialName} ${sessionInfoResponse.Meeting.Name}`,
+		title: `${sessionInfoResponse.Meeting.OfficialName}${sessionName ? `: ${sessionName}` : ""}`,
 		standings,
 	};
 
