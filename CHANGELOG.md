@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/obviyus/HamVerBot/compare/v1.1.0...v1.1.1) (2025-03-14)
+
+
+### Bug Fixes
+
+* ensure meeting name in results has session type ([7ad770f](https://github.com/obviyus/HamVerBot/commit/7ad770ff74fbe2c4abe3d23d6a659c6b9a528415))
+
 # [1.1.0](https://github.com/obviyus/HamVerBot/compare/v1.0.0...v1.1.0) (2025-03-04)
 
 
