@@ -11,8 +11,5 @@ RUN bun install --frozen-lockfile
 # Copy source code
 COPY . .
 
-# Install SQLite
-RUN apt-get update && apt-get install -y sqlite3 && rm -rf /var/lib/apt/lists/*
-
 # Set the entry point to run the application with bun start
 CMD ["bun", "start"]

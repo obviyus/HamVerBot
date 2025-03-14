@@ -162,7 +162,7 @@ export async function fetchF1Calendar(): Promise<void> {
 
 		// Store all events at once
 		if (events.length > 0) {
-			storeEvents(events);
+			await storeEvents(events);
 			console.log(`Successfully processed ${events.length} F1 events`);
 		} else {
 			console.warn("No F1 events found in the calendar");

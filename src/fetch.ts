@@ -5,6 +5,7 @@ import {
 	storeChampionshipStandings,
 	getNextEvent,
 	EventType,
+	getEventTypeName,
 } from "~/database";
 import type {
 	Driver,
@@ -152,19 +153,19 @@ async function extractPositionAndTiming(
 		throw new Error("Failed to extract lines from timing data");
 	}
 
-	const db = getDb();
+	const db = await getDb();
 
 	// Get all drivers from the database in a single query
-	const drivers = db
-		.query(`
-    SELECT racing_number, tla, team_name 
-    FROM driver_list
-  `)
-		.all() as Array<{
-		racing_number: number;
-		tla: string;
-		team_name: string;
-	}>;
+	const result = await db.execute(`
+		SELECT racing_number, tla, team_name 
+		FROM driver_list
+	`);
+
+	const drivers = result.rows.map((row) => ({
+		racing_number: row.racing_number as number,
+		tla: row.tla as string,
+		team_name: row.team_name as string,
+	}));
 
 	const standings: DriverStanding[] = [];
 
@@ -220,21 +221,24 @@ async function extractPositionAndTiming(
  */
 export async function fetchResults(path: string): Promise<string> {
 	console.log(`Fetching results for ${path}...`);
-	const db = getDb();
+	const db = await getDb();
 
 	try {
 		// Check if we already have results for this path with improved caching
 		const cacheCheckQuery = "SELECT data FROM results WHERE path = ? LIMIT 1";
-		const existingResult = db.query(cacheCheckQuery).get(path) as {
-			data: string;
-		} | null;
+		const result = await db.execute({
+			sql: cacheCheckQuery,
+			args: [path],
+		});
 
 		let sessionResult: SessionResults;
 
-		if (existingResult) {
+		if (result.rows.length > 0) {
 			console.log(`Using cached results for ${path}`);
 			try {
-				sessionResult = JSON.parse(existingResult.data) as SessionResults;
+				sessionResult = JSON.parse(
+					result.rows[0].data as string,
+				) as SessionResults;
 			} catch (parseError) {
 				console.error(
 					"Error parsing cached results, fetching fresh data:",
@@ -286,12 +290,13 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 		standings,
 	};
 
-	const db = getDb();
-	const nextEvent = db
-		.query(
-			"SELECT id FROM events WHERE start_time > unixepoch() AND event_type_id != 1 ORDER BY start_time LIMIT 1",
-		)
-		.get() as { id: number } | null;
+	const db = await getDb();
+	const result = await db.execute(
+		"SELECT id FROM events WHERE start_time > unixepoch() AND event_type_id != 1 ORDER BY start_time LIMIT 1",
+	);
+
+	const nextEvent =
+		result.rows.length > 0 ? { id: result.rows[0].id as number } : undefined;
 
 	if (!nextEvent) {
 		console.warn("No upcoming event found in database");
@@ -330,20 +335,21 @@ async function fetchStandings<T extends object>(
 	formatFn: (data: T) => string,
 ): Promise<string | null> {
 	console.log(`Fetching standings of type ${type}...`);
-	const db = getDb();
+	const db = await getDb();
 
 	try {
 		// Check if we already have standings in the database
-		const row = db
-			.query("SELECT data FROM championship_standings WHERE type = ? LIMIT 1")
-			.get(type) as { data: string } | null;
+		const result = await db.execute({
+			sql: "SELECT data FROM championship_standings WHERE type = ? LIMIT 1",
+			args: [type],
+		});
 
 		let standings: T;
 
 		// If we have standings, use them, otherwise fetch new ones
-		if (row) {
+		if (result.rows.length > 0) {
 			try {
-				standings = JSON.parse(row.data) as T;
+				standings = JSON.parse(result.rows[0].data as string) as T;
 			} catch (error) {
 				console.error(
 					"Error parsing cached standings, fetching fresh data:",
@@ -351,12 +357,12 @@ async function fetchStandings<T extends object>(
 				);
 				const response = await fetchJson<{ MRData: unknown }>(url);
 				standings = { mrData: response.MRData } as T;
-				storeChampionshipStandings(type, standings);
+				await storeChampionshipStandings(type, standings);
 			}
 		} else {
 			const response = await fetchJson<{ MRData: unknown }>(url);
 			standings = { mrData: response.MRData } as T;
-			storeChampionshipStandings(type, standings);
+			await storeChampionshipStandings(type, standings);
 		}
 
 		return formatFn(standings);
@@ -486,7 +492,7 @@ export async function fetchNextEvent(): Promise<string | null> {
 
 	try {
 		// Get the next event from the database
-		const nextEvent = getNextEvent();
+		const nextEvent = await getNextEvent();
 		if (!nextEvent) {
 			console.log("No upcoming events found in database");
 			return null;
@@ -508,7 +514,7 @@ export async function fetchNextEvent(): Promise<string | null> {
 		// Only notify if the event is starting in the next 5 minutes
 		if (timeToEventMinutes > 0 && timeToEventMinutes <= 5) {
 			// Get the event type name
-			const eventTypeName = eventTypeToString(eventType);
+			const eventTypeName = await getEventTypeName(eventType);
 			console.log(
 				`Event starting soon! Preparing notification for ${meetingName}: ${eventTypeName}`,
 			);

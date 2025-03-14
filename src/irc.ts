@@ -165,7 +165,7 @@ export function isClientAuthenticated(): boolean {
  */
 export async function broadcast(message: string): Promise<void> {
 	const client = getClient();
-	const channels = getAllChannels();
+	const channels = await getAllChannels();
 
 	for (const channel of channels) {
 		try {
@@ -209,11 +209,12 @@ export async function initIrcClient(config: {
 			: undefined;
 
 	// Register channel joining as an authentication callback
-	onAuthenticated(() => {
+	onAuthenticated(async () => {
 		console.log("Authentication complete, joining channels...");
-		const dbChannels = getAllChannels();
+		const dbChannels = await getAllChannels();
 		const configChannels = config.channels || [];
-		joinChannels([...dbChannels, ...configChannels]);
+		const allChannels = configChannels.concat(dbChannels);
+		joinChannels(allChannels);
 	});
 
 	// Connect to the IRC server
@@ -608,11 +609,12 @@ export async function attemptManualReconnect(): Promise<boolean> {
 				: undefined;
 
 		// Register channel joining as an authentication callback
-		onAuthenticated(() => {
+		onAuthenticated(async () => {
 			console.log("Authentication complete, rejoining channels...");
-			const dbChannels = getAllChannels();
+			const dbChannels = await getAllChannels();
 			const configChannels = appConfig.irc.channels;
-			joinChannels([...dbChannels, ...configChannels]);
+			const allChannels = configChannels.concat(dbChannels);
+			joinChannels(allChannels);
 		});
 
 		// Reconnect with the same configuration

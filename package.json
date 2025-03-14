@@ -14,6 +14,7 @@
 		"typescript": "^5.8.2"
 	},
 	"dependencies": {
+		"@libsql/client": "^0.14.0",
 		"cron": "^4.1.0",
 		"dotenv": "^16.4.7",
 		"irc-framework": "^4.14.0",

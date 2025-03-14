@@ -34,7 +34,8 @@ export interface IRCConfig {
  * Database configuration
  */
 export interface DatabaseConfig {
-	path: string;
+	url: string;
+	authToken: string;
 }
 
 /**
@@ -78,9 +79,8 @@ export function loadConfig(): AppConfig {
 		},
 
 		database: {
-			path:
-				process.env.DATABASE_PATH ||
-				join(import.meta.dir, "..", "HamVerBot.db"),
+			url: process.env.TURSO_DATABASE_URL || "",
+			authToken: process.env.TURSO_AUTH_TOKEN || "",
 		},
 
 		isDevelopment,

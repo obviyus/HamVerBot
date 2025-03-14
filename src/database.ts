@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { createClient } from "@libsql/client";
 import { readCurrentEvent } from "~/fetch";
 
 export enum EventType {
@@ -46,82 +46,95 @@ export interface DbEvent {
 	startTime: number;
 }
 
-// Default database path
-const DEFAULT_DB_PATH = "./HamVerBot.db";
+// Database configuration
+const config = {
+	url: process.env.TURSO_DATABASE_URL,
+	authToken: process.env.TURSO_AUTH_TOKEN,
+};
 
 // Single database instance
-let dbInstance: Database | null = null;
-
-// Prepared statements cache
-const preparedStatements: Record<string, ReturnType<Database["prepare"]>> = {};
+let dbInstance: ReturnType<typeof createClient> | null = null;
 
 // Function to initialize the database
-export function initDatabase(dbPath = DEFAULT_DB_PATH): Database {
+export async function initDatabase(): Promise<ReturnType<typeof createClient>> {
 	try {
-		const db = new Database(dbPath);
+		if (!config.url || !config.authToken) {
+			throw new Error("Missing Turso database configuration");
+		}
 
-		// Enable foreign keys
-		db.exec("PRAGMA foreign_keys = ON");
+		const client = createClient({
+			url: config.url,
+			authToken: config.authToken,
+		});
 
 		// Create tables if they don't exist
-		db.exec(`
-    CREATE TABLE IF NOT EXISTS event_type (
-      id INTEGER PRIMARY KEY,
-      name VARCHAR(255) NOT NULL UNIQUE
-    );
-    
-    CREATE TABLE IF NOT EXISTS events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      meeting_name VARCHAR(255) NOT NULL,
-      event_type_id INTEGER NOT NULL,
-      start_time INTEGER NOT NULL,
-      event_slug VARCHAR(255) NOT NULL UNIQUE,
-      FOREIGN KEY (event_type_id) REFERENCES event_type (id)
-    );
-    
-    CREATE TABLE IF NOT EXISTS results (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL,
-      path VARCHAR(255) NOT NULL UNIQUE,
-      data JSON NOT NULL,
-      create_time INTEGER NOT NULL DEFAULT (unixepoch()),
-      FOREIGN KEY (event_id) REFERENCES events (id)
-    );
-    
-    CREATE TABLE IF NOT EXISTS channels (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name VARCHAR(255) NOT NULL UNIQUE,
-      create_time INTEGER NOT NULL DEFAULT (unixepoch())
-    );
+		await client.execute(`
+			CREATE TABLE IF NOT EXISTS event_type (
+				id INTEGER PRIMARY KEY,
+				name VARCHAR(255) NOT NULL UNIQUE
+			)
+		`);
 
-    CREATE TABLE IF NOT EXISTS driver_list (
-      racing_number INTEGER PRIMARY KEY,
-      reference VARCHAR(255) NOT NULL,
-      first_name VARCHAR(255) NOT NULL,
-      last_name VARCHAR(255) NOT NULL,
-      full_name VARCHAR(255) NOT NULL,
-      broadcast_name VARCHAR(255) NOT NULL,
-      tla VARCHAR(255) NOT NULL,
-      team_name VARCHAR(255) NOT NULL,
-      team_color VARCHAR(255) NOT NULL
-    );
+		await client.execute(`
+			CREATE TABLE IF NOT EXISTS events (
+				id INTEGER PRIMARY KEY,
+				meeting_name VARCHAR(255) NOT NULL,
+				event_type_id INTEGER NOT NULL,
+				start_time INTEGER NOT NULL,
+				event_slug VARCHAR(255) NOT NULL UNIQUE,
+				FOREIGN KEY (event_type_id) REFERENCES event_type (id)
+			)
+		`);
 
-    CREATE TABLE IF NOT EXISTS championship_standings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type INTEGER NOT NULL UNIQUE,
-      data JSON NOT NULL,
-      create_time INTEGER NOT NULL DEFAULT (unixepoch())
-    );
-  `);
+		await client.execute(`
+			CREATE TABLE IF NOT EXISTS results (
+				id INTEGER PRIMARY KEY,
+				event_id INTEGER NOT NULL,
+				path VARCHAR(255) NOT NULL UNIQUE,
+				data JSON NOT NULL,
+				create_time INTEGER NOT NULL DEFAULT (unixepoch()),
+				FOREIGN KEY (event_id) REFERENCES events (id)
+			)
+		`);
+
+		await client.execute(`
+			CREATE TABLE IF NOT EXISTS channels (
+				id INTEGER PRIMARY KEY,
+				name VARCHAR(255) NOT NULL UNIQUE,
+				create_time INTEGER NOT NULL DEFAULT (unixepoch())
+			)
+		`);
+
+		await client.execute(`
+			CREATE TABLE IF NOT EXISTS driver_list (
+				racing_number INTEGER PRIMARY KEY,
+				reference VARCHAR(255) NOT NULL,
+				first_name VARCHAR(255) NOT NULL,
+				last_name VARCHAR(255) NOT NULL,
+				full_name VARCHAR(255) NOT NULL,
+				broadcast_name VARCHAR(255) NOT NULL,
+				tla VARCHAR(255) NOT NULL,
+				team_name VARCHAR(255) NOT NULL,
+				team_color VARCHAR(255) NOT NULL
+			)
+		`);
+
+		await client.execute(`
+			CREATE TABLE IF NOT EXISTS championship_standings (
+				id INTEGER PRIMARY KEY,
+				type INTEGER NOT NULL UNIQUE,
+				data JSON NOT NULL,
+				create_time INTEGER NOT NULL DEFAULT (unixepoch())
+			)
+		`);
 
 		// Check if event types already exist
-		const eventTypeCount = db
-			.query("SELECT COUNT(*) as count FROM event_type")
-			.get() as { count: number };
+		const eventTypeCount = await client.execute(
+			"SELECT COUNT(*) as count FROM event_type",
+		);
 
 		// Only insert event types if none exist
-		if (eventTypeCount.count === 0) {
-			// Insert event types
+		if (eventTypeCount.rows[0].count === 0) {
 			const eventTypes = [
 				{ id: EventType.LiveryReveal, name: "Livery Reveal" },
 				{ id: EventType.FreePractice1, name: "Practice 1" },
@@ -133,77 +146,59 @@ export function initDatabase(dbPath = DEFAULT_DB_PATH): Database {
 				{ id: EventType.SprintQualifying, name: "Sprint Qualifying" },
 			];
 
-			const stmt = db.prepare(
-				"INSERT INTO event_type (id, name) VALUES (?, ?)",
-			);
 			for (const type of eventTypes) {
-				stmt.run(type.id, type.name);
+				await client.execute({
+					sql: "INSERT INTO event_type (id, name) VALUES (?, ?)",
+					args: [type.id, type.name],
+				});
 			}
 		}
 
-		return db;
+		return client;
 	} catch (error) {
 		console.error(`Failed to initialize database: ${error}`);
 		throw error;
 	}
 }
 
-// Get a prepared statement or create one if it doesn't exist
-function getPreparedStatement(db: Database, key: string, sql: string) {
-	if (!preparedStatements[key]) {
-		preparedStatements[key] = db.prepare(sql);
-	}
-	return preparedStatements[key];
-}
-
 // Get or initialize the database instance
-export function getDb(dbPath = DEFAULT_DB_PATH): Database {
+export async function getDb(): Promise<ReturnType<typeof createClient>> {
 	if (!dbInstance) {
-		dbInstance = initDatabase(dbPath);
+		dbInstance = await initDatabase();
 	}
 	return dbInstance;
 }
 
-export function closeDb(): void {
+export async function closeDb(): Promise<void> {
 	if (dbInstance) {
-		// Clear prepared statements cache
-		for (const key in preparedStatements) {
-			delete preparedStatements[key];
-		}
-
-		dbInstance.close();
+		await dbInstance.close();
 		dbInstance = null;
 	}
 }
 
-// Store events in the database using a transaction for better performance
-export function storeEvents(events: Event[]): void {
+// Store events in the database
+export async function storeEvents(events: Event[]): Promise<void> {
 	if (events.length === 0) return;
 
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"storeEvents",
-			`INSERT INTO events (meeting_name, event_type_id, start_time, event_slug)
-			VALUES (?, ?, ?, ?)
-			ON CONFLICT(event_slug) DO UPDATE SET
-				meeting_name = excluded.meeting_name,
-				event_type_id = excluded.event_type_id,
-				start_time = excluded.start_time`,
-		);
+		const db = await getDb();
 
-		// Use transaction for batch operations
-		db.transaction(() => {
-			for (const event of events) {
-				stmt.run(
+		for (const event of events) {
+			await db.execute({
+				sql: `INSERT INTO events (meeting_name, event_type_id, start_time, event_slug)
+					VALUES (?, ?, ?, ?)
+					ON CONFLICT(event_slug) DO UPDATE SET
+						meeting_name = excluded.meeting_name,
+						event_type_id = excluded.event_type_id,
+						start_time = excluded.start_time`,
+				args: [
 					event.meetingName,
 					event.eventTypeId,
 					event.startTime,
 					event.eventSlug,
-				);
-			}
-		})();
+				],
+			});
+		}
 
 		console.log(`Stored ${events.length} events in the database`);
 	} catch (error) {
@@ -212,13 +207,11 @@ export function storeEvents(events: Event[]): void {
 }
 
 // Store driver in the database
-export function storeDriver(driver: Driver): void {
+export async function storeDriver(driver: Driver): Promise<void> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"storeDriver",
-			`INSERT INTO driver_list (
+		const db = await getDb();
+		await db.execute({
+			sql: `INSERT INTO driver_list (
 				racing_number, reference, first_name, last_name, full_name, 
 				broadcast_name, tla, team_name, team_color
 			) 
@@ -232,31 +225,28 @@ export function storeDriver(driver: Driver): void {
 				tla = excluded.tla,
 				team_name = excluded.team_name,
 				team_color = excluded.team_color`,
-		);
-
-		stmt.run(
-			driver.racingNumber,
-			driver.reference,
-			driver.firstName,
-			driver.lastName,
-			driver.fullName,
-			driver.broadcastName,
-			driver.tla,
-			driver.teamName,
-			driver.teamColor,
-		);
+			args: [
+				driver.racingNumber,
+				driver.reference,
+				driver.firstName,
+				driver.lastName,
+				driver.fullName,
+				driver.broadcastName,
+				driver.tla,
+				driver.teamName,
+				driver.teamColor,
+			],
+		});
 	} catch (error) {
 		console.error(`Error storing driver: ${error}`);
 	}
 }
 
-export function getAllDrivers(): Driver[] {
+export async function getAllDrivers(): Promise<Driver[]> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"getAllDrivers",
-			`SELECT 
+		const db = await getDb();
+		const result = await db.execute(`
+			SELECT 
 				racing_number as racingNumber, 
 				reference, 
 				first_name as firstName, 
@@ -266,10 +256,20 @@ export function getAllDrivers(): Driver[] {
 				tla, 
 				team_name as teamName, 
 				team_color as teamColor
-			FROM driver_list`,
-		);
+			FROM driver_list
+		`);
 
-		return stmt.all() as Driver[];
+		return result.rows.map((row) => ({
+			racingNumber: row.racingNumber as number,
+			reference: row.reference as string,
+			firstName: row.firstName as string,
+			lastName: row.lastName as string,
+			fullName: row.fullName as string,
+			broadcastName: row.broadcastName as string,
+			tla: row.tla as string,
+			teamName: row.teamName as string,
+			teamColor: row.teamColor as string,
+		}));
 	} catch (error) {
 		console.error(`Error getting all drivers: ${error}`);
 		return [];
@@ -277,52 +277,49 @@ export function getAllDrivers(): Driver[] {
 }
 
 // Get the next event
-export function getNextEvent(
-	eventType?: EventType,
-): { meetingName: string; eventType: EventType; startTime: number } | null {
+export async function getNextEvent(eventType?: EventType): Promise<{
+	meetingName: string;
+	eventType: EventType;
+	startTime: number;
+} | null> {
 	try {
-		const db = getDb();
+		const db = await getDb();
 
 		// Build query based on parameters
-		let query = `
+		let sql = `
 			SELECT meeting_name, event_type_id, start_time
 			FROM events
 			WHERE start_time > unixepoch()
 		`;
-
-		const params: EventType[] = [];
+		const params: (string | number)[] = [];
 
 		if (eventType) {
-			query += " AND event_type_id = ?";
+			sql += " AND event_type_id = ?";
 			params.push(eventType);
 		}
 
-		query += `
+		sql += `
 			ORDER BY start_time
 			LIMIT 1
 		`;
 
-		console.log(`Executing query: ${query} with params: ${params.join(", ")}`);
+		console.log(`Executing query: ${sql} with params: ${params.join(", ")}`);
 
-		const result = db.query(query).get(...params) as {
-			meeting_name: string;
-			event_type_id: number;
-			start_time: number;
-		} | null;
+		const result = await db.execute({ sql, args: params });
 
-		if (!result) {
+		if (result.rows.length === 0) {
 			console.log("No upcoming events found in database query");
 			return null;
 		}
 
+		const row = result.rows[0];
 		return {
-			meetingName: result.meeting_name,
-			eventType: result.event_type_id as EventType,
-			startTime: result.start_time,
+			meetingName: row.meeting_name as string,
+			eventType: row.event_type_id as EventType,
+			startTime: row.start_time as number,
 		};
 	} catch (error) {
 		console.error(`Error getting next event: ${error}`);
-		// Add more detailed error information
 		if (error instanceof Error) {
 			console.error(`Error stack: ${error.stack}`);
 		}
@@ -333,22 +330,20 @@ export function getNextEvent(
 // Get the latest path
 export async function getLatestPath(): Promise<string | null> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"getLatestPath",
+		const db = await getDb();
+		const result = await db.execute(
 			"SELECT path FROM results ORDER BY create_time DESC LIMIT 1",
 		);
 
-		const result = stmt.get() as { path: string } | null;
-		if (!result) {
+		if (result.rows.length === 0) {
 			const { path, isComplete } = await readCurrentEvent();
 			if (isComplete) {
 				return path;
 			}
+			return null;
 		}
 
-		return result ? result.path : null;
+		return result.rows[0].path as string;
 	} catch (error) {
 		console.error(`Error getting latest path: ${error}`);
 		return null;
@@ -356,17 +351,15 @@ export async function getLatestPath(): Promise<string | null> {
 }
 
 // Check if an event result has been delivered
-export function isEventDelivered(path: string): boolean {
+export async function isEventDelivered(path: string): Promise<boolean> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"isEventDelivered",
-			"SELECT 1 FROM results WHERE path = ?",
-		);
+		const db = await getDb();
+		const result = await db.execute({
+			sql: "SELECT 1 FROM results WHERE path = ?",
+			args: [path],
+		});
 
-		const result = stmt.get(path) as { 1: number } | null;
-		return !!result;
+		return result.rows.length > 0;
 	} catch (error) {
 		console.error(`Error checking if event is delivered: ${error}`);
 		return false;
@@ -374,83 +367,64 @@ export function isEventDelivered(path: string): boolean {
 }
 
 // Add a channel to the database
-export function addChannel(channelName: string): void {
+export async function addChannel(channelName: string): Promise<void> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"addChannel",
-			"INSERT OR IGNORE INTO channels (name) VALUES (?)",
-		);
-
-		stmt.run(channelName);
+		const db = await getDb();
+		await db.execute({
+			sql: "INSERT OR IGNORE INTO channels (name) VALUES (?)",
+			args: [channelName],
+		});
 	} catch (error) {
 		console.error(`Error adding channel: ${error}`);
 	}
 }
 
-export function getAllChannels(): string[] {
+export async function getAllChannels(): Promise<string[]> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"getAllChannels",
-			"SELECT name FROM channels",
-		);
-
-		const results = stmt.all() as { name: string }[];
-		return results.map((row) => row.name);
+		const db = await getDb();
+		const result = await db.execute("SELECT name FROM channels");
+		return result.rows.map((row) => row.name as string);
 	} catch (error) {
 		console.error(`Error getting all channels: ${error}`);
 		return [];
 	}
 }
 
-export function storeEventResult(
+export async function storeEventResult(
 	eventId: number,
 	path: string,
 	data: object,
-): void {
+): Promise<void> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"storeEventResult",
-			"INSERT INTO results (event_id, path, data) VALUES (?, ?, json(?))",
-		);
-
-		stmt.run(eventId, path, JSON.stringify(data));
+		const db = await getDb();
+		await db.execute({
+			sql: "INSERT INTO results (event_id, path, data) VALUES (?, ?, json(?))",
+			args: [eventId, path, JSON.stringify(data)],
+		});
 	} catch (error) {
 		console.error(`Error storing event result: ${error}`);
 	}
 }
 
 // Get event by slug
-export function getEventBySlug(slug: string): DbEvent | null {
+export async function getEventBySlug(slug: string): Promise<DbEvent | null> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"getEventBySlug",
-			"SELECT id, meeting_name, event_type_id, start_time FROM events WHERE event_slug = ?",
-		);
+		const db = await getDb();
+		const result = await db.execute({
+			sql: "SELECT id, meeting_name, event_type_id, start_time FROM events WHERE event_slug = ?",
+			args: [slug],
+		});
 
-		const result = stmt.get(slug) as {
-			id: number;
-			meeting_name: string;
-			event_type_id: number;
-			start_time: number;
-		} | null;
-
-		if (!result) {
+		if (result.rows.length === 0) {
 			return null;
 		}
 
+		const row = result.rows[0];
 		return {
-			id: result.id,
-			meetingName: result.meeting_name,
-			eventTypeId: result.event_type_id as EventType,
-			startTime: result.start_time,
+			id: row.id as number,
+			meetingName: row.meeting_name as string,
+			eventTypeId: row.event_type_id as EventType,
+			startTime: row.start_time as number,
 		};
 	} catch (error) {
 		console.error(`Error getting event by slug: ${error}`);
@@ -459,54 +433,56 @@ export function getEventBySlug(slug: string): DbEvent | null {
 }
 
 // Get event type name
-export function getEventTypeName(eventTypeId: EventType): string {
+export async function getEventTypeName(
+	eventTypeId: EventType,
+): Promise<string> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"getEventTypeName",
-			"SELECT name FROM event_type WHERE id = ?",
-		);
+		const db = await getDb();
+		const result = await db.execute({
+			sql: "SELECT name FROM event_type WHERE id = ?",
+			args: [eventTypeId],
+		});
 
-		const result = stmt.get(eventTypeId) as { name: string } | null;
-		return result ? result.name : "Unknown";
+		return result.rows.length > 0 ? (result.rows[0].name as string) : "Unknown";
 	} catch (error) {
 		console.error(`Error getting event type name: ${error}`);
 		return "Unknown";
 	}
 }
 
-export function storeChampionshipStandings(type: number, data: object): void {
+export async function storeChampionshipStandings(
+	type: number,
+	data: object,
+): Promise<void> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"storeChampionshipStandings",
-			`INSERT INTO championship_standings (type, data) 
-			VALUES (?, json(?)) 
-			ON CONFLICT(type) DO UPDATE SET 
-				data = json(excluded.data), 
-				create_time = unixepoch()`,
-		);
-
-		stmt.run(type, JSON.stringify(data));
+		const db = await getDb();
+		await db.execute({
+			sql: `INSERT INTO championship_standings (type, data) 
+				VALUES (?, json(?)) 
+				ON CONFLICT(type) DO UPDATE SET 
+					data = json(excluded.data), 
+					create_time = unixepoch()`,
+			args: [type, JSON.stringify(data)],
+		});
 	} catch (error) {
 		console.error(`Error storing championship standings: ${error}`);
 	}
 }
 
 // Get championship standings
-export function getChampionshipStandings(type: number): object | null {
+export async function getChampionshipStandings(
+	type: number,
+): Promise<object | null> {
 	try {
-		const db = getDb();
-		const stmt = getPreparedStatement(
-			db,
-			"getChampionshipStandings",
-			"SELECT data FROM championship_standings WHERE type = ? LIMIT 1",
-		);
+		const db = await getDb();
+		const result = await db.execute({
+			sql: "SELECT data FROM championship_standings WHERE type = ? LIMIT 1",
+			args: [type],
+		});
 
-		const result = stmt.get(type) as { data: string } | null;
-		return result ? JSON.parse(result.data) : null;
+		return result.rows.length > 0
+			? JSON.parse(result.rows[0].data as string)
+			: null;
 	} catch (error) {
 		console.error(`Error getting championship standings: ${error}`);
 		return null;
