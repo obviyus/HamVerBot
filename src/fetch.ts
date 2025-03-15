@@ -224,10 +224,18 @@ export async function fetchResults(path: string): Promise<string> {
 	const db = await getDb();
 
 	try {
-		// Check if we already have results for this path with improved caching
-		const cacheCheckQuery = "SELECT data FROM results WHERE path = ? LIMIT 1";
+		// First get the event_id and event_type from the results and events tables
+		const eventQuery = `
+			SELECT e.meeting_name, et.name as event_type_name, r.data
+			FROM results r
+			JOIN events e ON r.event_id = e.id
+			JOIN event_type et ON e.event_type_id = et.id
+			WHERE r.path = ?
+			LIMIT 1
+		`;
+
 		const result = await db.execute({
-			sql: cacheCheckQuery,
+			sql: eventQuery,
 			args: [path],
 		});
 
@@ -236,9 +244,14 @@ export async function fetchResults(path: string): Promise<string> {
 		if (result.rows.length > 0) {
 			console.log(`Using cached results for ${path}`);
 			try {
-				sessionResult = JSON.parse(
-					result.rows[0].data as string,
-				) as SessionResults;
+				const row = result.rows[0];
+				const data = JSON.parse(row.data as string) as SessionResults;
+
+				// Update the title to include the event type from the database
+				sessionResult = {
+					...data,
+					title: `${row.meeting_name}: ${row.event_type_name}`,
+				};
 			} catch (parseError) {
 				console.error(
 					"Error parsing cached results, fetching fresh data:",
