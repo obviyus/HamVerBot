@@ -1,3 +1,16 @@
+# [1.2.0](https://github.com/obviyus/HamVerBot/compare/v1.1.1...v1.2.0) (2025-03-23)
+
+
+### Bug Fixes
+
+* change case in ergast API ([49930e0](https://github.com/obviyus/HamVerBot/commit/49930e048fbc65188e3e8584d05635cc6d7bb4e8))
+* ensure event type in result output ([6015c85](https://github.com/obviyus/HamVerBot/commit/6015c85a2dd09e1a76d213b3d656821701491146))
+
+
+### Features
+
+* migrate to libSQL ([2c1024c](https://github.com/obviyus/HamVerBot/commit/2c1024c8b7da281a678c08acd6bb97159d73ca80))
+
 ## [1.1.1](https://github.com/obviyus/HamVerBot/compare/v1.1.0...v1.1.1) (2025-03-14)
 
 
