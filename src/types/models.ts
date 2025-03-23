@@ -102,8 +102,8 @@ export interface ErgastDriverStanding {
 	positionText: string;
 	points: string;
 	wins: string;
-	driver: ErgastDriver;
-	constructors: Constructor[];
+	Driver: ErgastDriver;
+	Constructors: Constructor[];
 }
 
 // Constructor Standing model
@@ -112,31 +112,31 @@ export interface ConstructorStanding {
 	positionText: string;
 	points: string;
 	wins: string;
-	constructor: Constructor;
+	Constructor: Constructor;
 }
 
 // Standings Lists
 export interface DriverStandingsList {
 	season: string;
 	round: string;
-	driverStandings: ErgastDriverStanding[];
+	DriverStandings: ErgastDriverStanding[];
 }
 
 export interface ConstructorStandingsList {
 	season: string;
 	round: string;
-	constructorStandings: ConstructorStanding[];
+	ConstructorStandings: ConstructorStanding[];
 }
 
 // Standings Tables
 export interface DriverStandingsTable {
 	season: string;
-	standingsLists: DriverStandingsList[];
+	StandingsLists: DriverStandingsList[];
 }
 
 export interface ConstructorStandingsTable {
 	season: string;
-	standingsLists: ConstructorStandingsList[];
+	StandingsLists: ConstructorStandingsList[];
 }
 
 // MRData models
@@ -147,7 +147,7 @@ export interface DriverMRData {
 	limit: string;
 	offset: string;
 	total: string;
-	standingsTable: DriverStandingsTable;
+	StandingsTable: DriverStandingsTable;
 }
 
 export interface ConstructorMRData {
@@ -157,16 +157,16 @@ export interface ConstructorMRData {
 	limit: string;
 	offset: string;
 	total: string;
-	standingsTable: ConstructorStandingsTable;
+	StandingsTable: ConstructorStandingsTable;
 }
 
 // Current Standings models
 export interface CurrentDriverStandings {
-	mrData: DriverMRData;
+	MRData: DriverMRData;
 }
 
 export interface CurrentConstructorStandings {
-	mrData: ConstructorMRData;
+	MRData: ConstructorMRData;
 }
 
 // Calendar Events model

@@ -369,12 +369,12 @@ async function fetchStandings<T extends object>(
 					error,
 				);
 				const response = await fetchJson<{ MRData: unknown }>(url);
-				standings = { mrData: response.MRData } as T;
+				standings = { MRData: response.MRData } as T;
 				await storeChampionshipStandings(type, standings);
 			}
 		} else {
 			const response = await fetchJson<{ MRData: unknown }>(url);
-			standings = { mrData: response.MRData } as T;
+			standings = { MRData: response.MRData } as T;
 			await storeChampionshipStandings(type, standings);
 		}
 
@@ -397,7 +397,7 @@ export async function fetchWccStandings(): Promise<CurrentConstructorStandings |
 
 		// Convert API response to our model
 		const standings: CurrentConstructorStandings = {
-			mrData: response.MRData,
+			MRData: response.MRData,
 		};
 
 		// Store the standings in the database
@@ -422,7 +422,7 @@ export async function fetchWdcStandings(): Promise<CurrentDriverStandings | null
 
 		// Convert API response to our model
 		const standings: CurrentDriverStandings = {
-			mrData: response.MRData,
+			MRData: response.MRData,
 		};
 
 		// Store the standings in the database
@@ -440,16 +440,16 @@ export async function fetchWdcStandings(): Promise<CurrentDriverStandings | null
  */
 function formatWccStandings(standings: CurrentConstructorStandings): string {
 	// Format the standings for output
-	let output = `🔧 \x02FORMULA 1 ${standings.mrData.standingsTable.season} WCC Standings\x02:`;
+	let output = `🔧 \x02FORMULA 1 ${standings.MRData.StandingsTable.season} WCC Standings\x02:`;
 
 	// Get the first standings list
-	const standingsList = standings.mrData.standingsTable.standingsLists[0];
+	const standingsList = standings.MRData.StandingsTable.StandingsLists[0];
 
 	// Take only the top 10 constructors to avoid spamming
-	const topConstructors = standingsList.constructorStandings.slice(0, 10);
+	const topConstructors = standingsList.ConstructorStandings.slice(0, 10);
 
 	for (const standing of topConstructors) {
-		output += ` ${standing.position}. ${standing.constructor.name} - \x0303[${standing.points}]\x03`;
+		output += ` ${standing.position}. ${standing.Constructor.name} - \x0303[${standing.points}]\x03`;
 	}
 
 	return output;
@@ -460,16 +460,16 @@ function formatWccStandings(standings: CurrentConstructorStandings): string {
  */
 function formatWdcStandings(standings: CurrentDriverStandings): string {
 	// Format the standings for output
-	let output = `🏆 \x02FORMULA 1 ${standings.mrData.standingsTable.season} WDC Standings\x02:`;
+	let output = `🏆 \x02FORMULA 1 ${standings.MRData.StandingsTable.season} WDC Standings\x02:`;
 
 	// Get the first standings list
-	const standingsList = standings.mrData.standingsTable.standingsLists[0];
+	const standingsList = standings.MRData.StandingsTable.StandingsLists[0];
 
 	// Take only the top 10 drivers to avoid spamming
-	const topDrivers = standingsList.driverStandings.slice(0, 10);
+	const topDrivers = standingsList.DriverStandings.slice(0, 10);
 
 	for (const standing of topDrivers) {
-		output += ` ${standing.position}. ${standing.driver.code} - \x0303[${standing.points}]\x03`;
+		output += ` ${standing.position}. ${standing.Driver.code} - \x0303[${standing.points}]\x03`;
 	}
 
 	return output;
