@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/obviyus/HamVerBot/compare/v1.2.0...v1.2.1) (2025-03-27)
+
+
+### Bug Fixes
+
+* **message:** limit hours and minutes offsets in parseOffset function ([b7e71be](https://github.com/obviyus/HamVerBot/commit/b7e71bea12d48a6f8566aa68a60817787db6ed13))
+
 # [1.2.0](https://github.com/obviyus/HamVerBot/compare/v1.1.1...v1.2.0) (2025-03-23)
 
 
