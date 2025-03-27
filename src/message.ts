@@ -54,19 +54,42 @@ function parseOffset(offsetStr: string): number | undefined {
 	if (parts.length === 1) {
 		// Just hours
 		const hours = Number.parseInt(parts[0], 10);
-		if (Number.isNaN(hours)) return undefined;
+		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign)) return undefined;
 		seconds = hours * 3600;
 	} else if (parts.length === 2) {
 		// Hours and minutes
 		const hours = Number.parseInt(parts[0], 10);
 		const minutes = Number.parseInt(parts[1], 10);
-		if (Number.isNaN(hours) || Number.isNaN(minutes)) return undefined;
+		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign)) return undefined;
+		if (Number.isNaN(minutes) || !isValidMinutesOffset(minutes)) return undefined;
 		seconds = hours * 3600 + minutes * 60;
 	} else {
 		return undefined;
 	}
 
 	return (seconds * sign) / 60;
+}
+
+/**
+ * Check if the hours offset is within valid range (from -12 to +14)
+ * @param signedOffset - A signed hours offset
+ * @returns True if the offset is within the range
+ */
+function isValidHoursOffset(signedOffset: number): boolean {
+	const minHoursOffset = -12, maxHoursOffset = 14;
+
+	return signedOffset >= minHoursOffset && signedOffset <= maxHoursOffset;
+}
+
+/**
+ * Check if the minutes offset is within valid range (from 0 to 59)
+ * @param minutes - A minutes offset
+ * @returns True if minutes are within the range
+ */
+function isValidMinutesOffset(minutes: number): boolean {
+	const minMinutesOffset = 0, maxMinutesOffset = 59;
+
+	return minutes >= minMinutesOffset && minutes <= maxMinutesOffset;
 }
 
 /**

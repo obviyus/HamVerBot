@@ -16,6 +16,7 @@
 ## ✨ Features
 
 ### Commands
+
 - `!next [timezone]` - Time until the next event (supports timezone like `utc+1`, `gmt-5:30`)
 - `!when [event] [timezone]` - Time until a specific event (fp1, fp2, fp3, qualifying, sprint, race)
 - `!prev` - Get results from the last completed event
@@ -24,6 +25,7 @@
 - `!help` - List all available commands
 
 ### Automated Updates 🤖
+
 - 🏁 Automatic event alerts 5 minutes before start
 - 📊 Real-time race results posted to configured channels
 - 🔄 Hourly updates of WDC and WCC standings
@@ -58,8 +60,9 @@ IRC_COMMAND_PREFIX=!
 # Admin Settings
 IRC_OWNERS=obviyus
 
-# Database Configuration
-DATABASE_PATH=./HamVerBot.db
+# Database Configuration, see: https://turso.tech/
+TURSO_DATABASE_URL=
+TURSO_AUTH_TOKEN=
 ```
 
 To run the bot:
