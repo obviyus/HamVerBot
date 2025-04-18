@@ -4,33 +4,26 @@ import type { Event } from "~/database";
 import { EventType } from "~/database";
 
 // Helper function to determine event type from summary
+// Simplified determineEventType
 function determineEventType(summary: string): EventType | null {
 	const lowerSummary = summary.toLowerCase();
 
-	const eventTypePatterns: Record<string, EventType> = {
-		"practice 1": EventType.FreePractice1,
-		fp1: EventType.FreePractice1,
-		"practice 2": EventType.FreePractice2,
-		fp2: EventType.FreePractice2,
-		"practice 3": EventType.FreePractice3,
-		fp3: EventType.FreePractice3,
-		"sprint qualifying": EventType.SprintQualifying,
-		qualifying: EventType.Qualifying,
-		sprint: EventType.Sprint,
-		race: EventType.Race,
-		livery: EventType.LiveryReveal,
-	};
+	// Order patterns from most specific to least specific
+	const eventTypePatterns: [string, EventType][] = [
+		["sprint qualifying", EventType.SprintQualifying], // Most specific first
+		["qualifying", EventType.Qualifying],
+		["practice 1", EventType.FreePractice1],
+		["fp1", EventType.FreePractice1],
+		["practice 2", EventType.FreePractice2],
+		["fp2", EventType.FreePractice2],
+		["practice 3", EventType.FreePractice3],
+		["fp3", EventType.FreePractice3],
+		["sprint", EventType.Sprint], // Check 'sprint' after 'sprint qualifying'
+		["race", EventType.Race],
+		["livery", EventType.LiveryReveal],
+	];
 
-	// Check patterns in order of specificity
-	for (const [pattern, eventType] of Object.entries(eventTypePatterns)) {
-		// Handle special case for sprint qualifying
-		if (
-			pattern === "qualifying" &&
-			lowerSummary.includes("sprint qualifying")
-		) {
-			continue;
-		}
-
+	for (const [pattern, eventType] of eventTypePatterns) {
 		if (lowerSummary.includes(pattern)) {
 			return eventType;
 		}
