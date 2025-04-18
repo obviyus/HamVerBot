@@ -57,7 +57,7 @@ async function resultWorker(): Promise<void> {
 
 	try {
 		const { path, isComplete } = await readCurrentEvent();
-		const delivered = isEventDelivered(path);
+		const delivered = await isEventDelivered(path);
 
 		if (isComplete && !delivered) {
 			const standings = await fetchResults(path);
