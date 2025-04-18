@@ -1,3 +1,15 @@
+# [1.3.0](https://github.com/obviyus/HamVerBot/compare/v1.2.1...v1.3.0) (2025-04-18)
+
+
+### Bug Fixes
+
+* await delivery check ([7a8a5df](https://github.com/obviyus/HamVerBot/commit/7a8a5df5a189a568486c31767ab3562fafc02998))
+
+
+### Features
+
+* simplify event type check ([f32e90c](https://github.com/obviyus/HamVerBot/commit/f32e90c61ce1fe531bdf66eff758bae67c4df57a))
+
 ## [1.2.1](https://github.com/obviyus/HamVerBot/compare/v1.2.0...v1.2.1) (2025-03-27)
 
 
