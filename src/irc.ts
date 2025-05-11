@@ -346,6 +346,9 @@ function initEventListeners(
 		console.log(
 			"Auto reconnect is enabled, will attempt to reconnect shortly...",
 		);
+
+		// Clear any existing auth callbacks to prevent duplicates
+		authCallbacks.length = 0;
 	});
 
 	// Handle reconnections
@@ -357,8 +360,17 @@ function initEventListeners(
 	});
 
 	// Handle successful reconnection
-	client.on("connected", () => {
+	client.on("connected", async () => {
 		console.log("Successfully reconnected to IRC server");
+
+		// If we were previously authenticated, we need to rejoin channels
+		if (isAuthenticated) {
+			console.log("Rejoining channels after reconnection...");
+			const dbChannels = await getAllChannels();
+			const configChannels = appConfig.irc.channels || [];
+			const allChannels = configChannels.concat(dbChannels);
+			joinChannels(allChannels);
+		}
 	});
 
 	// Handle ping timeouts
