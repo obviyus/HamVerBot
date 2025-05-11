@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/obviyus/HamVerBot/compare/v1.3.0...v1.4.0) (2025-05-11)
+
+
+### Features
+
+* re-join on re-connect ([ee3c7f4](https://github.com/obviyus/HamVerBot/commit/ee3c7f4560c0daa3ef06cc385e199302a1f84795))
+
 # [1.3.0](https://github.com/obviyus/HamVerBot/compare/v1.2.1...v1.3.0) (2025-04-18)
 
 
