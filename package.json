@@ -8,13 +8,13 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
-		"@types/bun": "latest"
+		"@types/bun": "^1.2.13"
 	},
 	"peerDependencies": {
-		"typescript": "^5.8.2"
+		"typescript": "^5.8.3"
 	},
 	"dependencies": {
-		"@libsql/client": "^0.14.0",
+		"@libsql/client": "^0.15.5",
 		"cron": "^4.3.0",
 		"dotenv": "^16.5.0",
 		"irc-framework": "^4.14.0",
