@@ -9,6 +9,8 @@ import {
 import { isEventDelivered } from "~/database";
 import { broadcast } from "~/irc";
 import { fetchF1Calendar } from "~/calendar";
+import { getNextEvent, getEventTypeName } from "~/database";
+import { getClient } from "~/irc";
 
 /**
  * Enum representing different job types
@@ -62,6 +64,7 @@ async function resultWorker(): Promise<void> {
 		if (isComplete && !delivered) {
 			const standings = await fetchResults(path);
 			await broadcast(standings);
+			await updateIrcTopicsWithNextEvent();
 		}
 	} catch (error) {
 		console.error("Error in result worker:", error);
@@ -86,6 +89,30 @@ async function alertWorker(): Promise<void> {
 		console.error("Error in alert worker:", error);
 		// Don't throw the error further, just log it
 		// This prevents the error from affecting the IRC connection
+	}
+}
+
+async function updateIrcTopicsWithNextEvent() {
+	const client = getClient();
+	const channels = ["#f1"];
+	const nextEvent = await getNextEvent();
+	if (!nextEvent) return;
+
+	const { meetingName, eventType, startTime } = nextEvent;
+	const eventTypeName = await getEventTypeName(eventType);
+	const eventDate = new Date(startTime * 1000);
+	const month = eventDate.toLocaleString("en-US", { month: "short" });
+	const day = eventDate.getDate();
+	const year = eventDate.getFullYear();
+	const dateStr = `${day} ${month} ${year}`;
+	const topic = `🏎  Welcome to #f1 | Join the #f1 pool: f.ormula.one | Type !d or !c for driver / constructor standings, !n for countdown to next session | f1calendar.com | Next Event: ${meetingName} (${eventTypeName}) on ${dateStr}`;
+	for (const channel of channels) {
+		try {
+			client.setTopic(channel, topic);
+			console.log(`Set topic for ${channel}: ${topic}`);
+		} catch (err) {
+			console.error(`Failed to set topic for ${channel}:`, err);
+		}
 	}
 }
 
