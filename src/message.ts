@@ -1,10 +1,14 @@
 import { EventType, getLatestPath, getNextEvent } from "./database";
 import {
-	fetchResults,
-	returnWdcStandings,
-	returnWccStandings,
-	eventTypeToEmoji,
+        fetchResults,
+        returnWdcStandings,
+        returnWccStandings,
 } from "./fetch";
+import {
+        eventTypeToEmoji,
+        eventTypeToString,
+        stringToEventType,
+} from "~/utils/events";
 import { getClient } from "./irc";
 
 /**
@@ -92,102 +96,6 @@ function isValidMinutesOffset(minutes: number): boolean {
 	return minutes >= minMinutesOffset && minutes <= maxMinutesOffset;
 }
 
-/**
- * Convert an event type to its string representation
- * @param eventType - The event type
- * @returns The string representation of the event type
- */
-function eventTypeToString(eventType: EventType): string {
-	switch (eventType) {
-		case EventType.LiveryReveal:
-			return "Livery Reveal";
-		case EventType.FreePractice1:
-			return "Free Practice 1";
-		case EventType.FreePractice2:
-			return "Free Practice 2";
-		case EventType.FreePractice3:
-			return "Free Practice 3";
-		case EventType.Qualifying:
-			return "Qualifying";
-		case EventType.Sprint:
-			return "Sprint";
-		case EventType.Race:
-			return "Race";
-		case EventType.SprintQualifying:
-			return "Sprint Qualifying";
-		default:
-			return "Unknown";
-	}
-}
-
-/**
- * Convert a string to an event type
- * @param str - The string to convert
- * @returns The corresponding event type or undefined if not found
- */
-function stringToEventType(str?: string): EventType | undefined {
-	if (!str) return undefined;
-
-	const lowerStr = str.toLowerCase();
-
-	if (
-		lowerStr.includes("fp1") ||
-		lowerStr.includes("practice1") ||
-		lowerStr.includes("p1")
-	) {
-		return EventType.FreePractice1;
-	}
-
-	if (
-		lowerStr.includes("fp2") ||
-		lowerStr.includes("practice2") ||
-		lowerStr.includes("p2")
-	) {
-		return EventType.FreePractice2;
-	}
-
-	if (
-		lowerStr.includes("fp3") ||
-		lowerStr.includes("practice3") ||
-		lowerStr.includes("p3")
-	) {
-		return EventType.FreePractice3;
-	}
-
-	if (lowerStr.includes("sq")) {
-		return EventType.SprintQualifying;
-	}
-
-	if (
-		lowerStr.includes("quali") ||
-		lowerStr.includes("q") ||
-		lowerStr.includes("qualifying")
-	) {
-		return EventType.Qualifying;
-	}
-
-	if (
-		lowerStr.includes("sprint") ||
-		lowerStr.includes("s") ||
-		lowerStr.includes("sprint race")
-	) {
-		return EventType.Sprint;
-	}
-
-	if (
-		lowerStr.includes("race") ||
-		lowerStr.includes("r") ||
-		lowerStr.includes("gp")
-	) {
-		return EventType.Race;
-	}
-
-	if (lowerStr.includes("livery") || lowerStr.includes("l")) {
-		return EventType.LiveryReveal;
-	}
-
-	return undefined;
-}
 
 /**
  * Build a time string for an event

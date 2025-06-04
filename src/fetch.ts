@@ -1,12 +1,13 @@
 import {
-	getDb,
-	storeDriver,
-	storeEventResult,
-	storeChampionshipStandings,
-	getNextEvent,
-	EventType,
-	getEventTypeName,
+        getDb,
+        storeDriver,
+        storeEventResult,
+        storeChampionshipStandings,
+        getNextEvent,
+        EventType,
+        getEventTypeName,
 } from "~/database";
+import { eventTypeToString, sessionKeyToEventType } from "~/utils/events";
 import type {
 	Driver,
 	DriverStanding,
@@ -544,76 +545,3 @@ export async function fetchNextEvent(): Promise<string | null> {
 	}
 }
 
-/**
- * Convert EventType enum to string
- */
-function eventTypeToString(eventType: EventType): string {
-	switch (eventType) {
-		case EventType.LiveryReveal:
-			return "Livery Reveal";
-		case EventType.FreePractice1:
-			return "Free Practice 1";
-		case EventType.FreePractice2:
-			return "Free Practice 2";
-		case EventType.FreePractice3:
-			return "Free Practice 3";
-		case EventType.Qualifying:
-			return "Qualifying";
-		case EventType.Sprint:
-			return "Sprint Race";
-		case EventType.Race:
-			return "Race";
-		case EventType.SprintQualifying:
-			return "Sprint Qualifying";
-		default:
-			return "Unknown Event";
-	}
-}
-
-/**
- * Convert session key to EventType
- */
-function sessionKeyToEventType(key: string): EventType | null {
-	switch (key) {
-		case "fp1":
-			return EventType.FreePractice1;
-		case "fp2":
-			return EventType.FreePractice2;
-		case "fp3":
-			return EventType.FreePractice3;
-		case "qualifying":
-			return EventType.Qualifying;
-		case "sprint":
-			return EventType.Sprint;
-		case "race":
-			return EventType.Race;
-		case "sprintQualifying":
-			return EventType.SprintQualifying;
-		default:
-			return null;
-	}
-}
-
-/**
- * Convert EventType to emoji
- */
-export function eventTypeToEmoji(eventType: EventType): string {
-	switch (eventType) {
-		case EventType.LiveryReveal:
-			return "🎨";
-		case EventType.FreePractice1:
-		case EventType.FreePractice2:
-		case EventType.FreePractice3:
-			return "🏎️";
-		case EventType.Qualifying:
-			return "⏱️";
-		case EventType.Sprint:
-			return "🏁";
-		case EventType.Race:
-			return "🏎️";
-		case EventType.SprintQualifying:
-			return "⏱️";
-		default:
-			return "🏎️";
-	}
-}
