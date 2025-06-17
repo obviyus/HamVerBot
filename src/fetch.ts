@@ -1,11 +1,10 @@
 import {
-        getDb,
-        storeDriver,
-        storeEventResult,
-        storeChampionshipStandings,
-        getNextEvent,
-        EventType,
-        getEventTypeName,
+	getDb,
+	storeDriver,
+	storeEventResult,
+	storeChampionshipStandings,
+	getNextEvent,
+	getEventTypeName,
 } from "~/database";
 import { eventTypeToString, sessionKeyToEventType } from "~/utils/events";
 import type {
@@ -294,7 +293,7 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 	const standings = await extractPositionAndTiming(timingData);
 
 	// Extract session type from path
-	const sessionKey = path.split("/").pop()?.split("_")[0].toLowerCase();
+	const sessionKey = path.split("/").pop()?.split("_").pop()?.toLowerCase();
 	const eventType = sessionKey ? sessionKeyToEventType(sessionKey) : null;
 	const sessionName = eventType ? eventTypeToString(eventType) : "";
 
@@ -544,4 +543,3 @@ export async function fetchNextEvent(): Promise<string | null> {
 		return null;
 	}
 }
-
