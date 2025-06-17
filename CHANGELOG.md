@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/obviyus/HamVerBot/compare/v1.4.0...v1.4.1) (2025-06-17)
+
+
+### Bug Fixes
+
+* pop event key, not date from path ([b7edc05](https://github.com/obviyus/HamVerBot/commit/b7edc052bf7a45fb6d6d4247e88c10d66b9a5de2))
+
 # [1.4.0](https://github.com/obviyus/HamVerBot/compare/v1.3.0...v1.4.0) (2025-05-11)
 
 
