@@ -16,7 +16,7 @@
 	"dependencies": {
 		"@libsql/client": "^0.15.9",
 		"cron": "^4.3.1",
-		"dotenv": "^16.5.0",
+		"dotenv": "^17.2.1",
 		"irc-framework": "^4.14.0",
 		"node-ical": "^0.20.1"
 	}
