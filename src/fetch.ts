@@ -15,7 +15,7 @@ import type {
 	DriverStanding,
 	SessionResults,
 } from "~/types/models";
-import { sessionKeyToEventType } from "~/utils/events";
+import { sessionKeyToEventType, stringToEventType } from "~/utils/events";
 
 // API endpoints
 const F1_SESSION_ENDPOINT = "https://livetiming.formula1.com/static";
@@ -292,12 +292,34 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 	// Extract driver standings
 	const standings = await extractPositionAndTiming(timingData);
 
-	// Extract session type from path
-	const sanitizedPath = path.replace(/\/+$/, "");
-	const lastSegment = sanitizedPath.split("/").filter(Boolean).pop() ?? "";
-	const rawKey = lastSegment.split("_").pop() ?? "";
-	const sessionKey = rawKey.toLowerCase();
-	const eventType = sessionKey ? sessionKeyToEventType(sessionKey) : null;
+    // Extract session type from path
+    // Example paths:
+    //   2025/.../2025-09-05_Practice_2/  -> practice2 -> fp2 -> FreePractice2
+    //   2025/.../2025-09-06_Qualifying/  -> qualifying -> Qualifying
+    //   2025/.../2025-09-07_Race/        -> race -> Race
+    //   2025/.../2025-09-06_Sprint_Shootout/ -> sprintshootout -> sprintqualifying
+    const sanitizedPath = path.replace(/\/+$/, "");
+    const lastSegment = sanitizedPath.split("/").filter(Boolean).pop() ?? "";
+    const parts = lastSegment.split("_").filter(Boolean);
+    if (parts.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(parts[0])) {
+        parts.shift(); // drop leading date component
+    }
+    // Join remaining parts without separators and lowercase
+    let normalizedKey = parts.join("").toLowerCase();
+    // Normalize known variants
+    if (normalizedKey === "practice1") normalizedKey = "fp1";
+    if (normalizedKey === "practice2") normalizedKey = "fp2";
+    if (normalizedKey === "practice3") normalizedKey = "fp3";
+    if (normalizedKey === "sprintshootout" || normalizedKey === "sprintshootoutqualifying") {
+        normalizedKey = "sprintqualifying";
+    }
+
+    // Try strict mapping first, then fuzzy mapping as fallback
+    let eventType = normalizedKey ? sessionKeyToEventType(normalizedKey) : null;
+    if (eventType === null && normalizedKey) {
+        const fallback = stringToEventType(normalizedKey);
+        eventType = typeof fallback === "number" ? fallback : null;
+    }
 	// Prefer DB's canonical event type name ("Practice 1") over utils ("Free Practice 1")
 	const sessionName =
 		eventType !== null ? await getEventTypeName(eventType) : "";
