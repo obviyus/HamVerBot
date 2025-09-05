@@ -1,3 +1,11 @@
+## [1.4.3](https://github.com/obviyus/HamVerBot/compare/v1.4.2...v1.4.3) (2025-09-05)
+
+
+### Bug Fixes
+
+* enhance session type extraction with normalization and fallback mapping ([ccc51fb](https://github.com/obviyus/HamVerBot/commit/ccc51fb23a51bf81a62602d118523059bbf9d215))
+* improve result broadcasting logic in resultWorker function ([d043960](https://github.com/obviyus/HamVerBot/commit/d0439606fe11340d5bad7cce73a67ff50fe3d7e1))
+
 ## [1.4.2](https://github.com/obviyus/HamVerBot/compare/v1.4.1...v1.4.2) (2025-09-05)
 
 
