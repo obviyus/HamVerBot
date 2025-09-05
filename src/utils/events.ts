@@ -53,7 +53,7 @@ const sessionKeyMap: Record<string, EventType> = {
   qualifying: EventType.Qualifying,
   sprint: EventType.Sprint,
   race: EventType.Race,
-  sprintQualifying: EventType.SprintQualifying,
+  sprintqualifying: EventType.SprintQualifying,
 };
 
 export function eventTypeToString(eventType: EventType): string {

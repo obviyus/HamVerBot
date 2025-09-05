@@ -1,21 +1,21 @@
 import {
 	getDb,
+	getEventTypeName,
+	getNextEvent,
+	storeChampionshipStandings,
 	storeDriver,
 	storeEventResult,
-	storeChampionshipStandings,
-	getNextEvent,
-	getEventTypeName,
 } from "~/database";
-import { eventTypeToString, sessionKeyToEventType } from "~/utils/events";
 import type {
+	ConstructorMRData,
+	CurrentConstructorStandings,
+	CurrentDriverStandings,
 	Driver,
+	DriverMRData,
 	DriverStanding,
 	SessionResults,
-	CurrentConstructorStandings,
-	ConstructorMRData,
-	CurrentDriverStandings,
-	DriverMRData,
 } from "~/types/models";
+import { sessionKeyToEventType } from "~/utils/events";
 
 // API endpoints
 const F1_SESSION_ENDPOINT = "https://livetiming.formula1.com/static";
@@ -293,9 +293,14 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 	const standings = await extractPositionAndTiming(timingData);
 
 	// Extract session type from path
-	const sessionKey = path.split("/").pop()?.split("_").pop()?.toLowerCase();
+	const sanitizedPath = path.replace(/\/+$/, "");
+	const lastSegment = sanitizedPath.split("/").filter(Boolean).pop() ?? "";
+	const rawKey = lastSegment.split("_").pop() ?? "";
+	const sessionKey = rawKey.toLowerCase();
 	const eventType = sessionKey ? sessionKeyToEventType(sessionKey) : null;
-	const sessionName = eventType ? eventTypeToString(eventType) : "";
+	// Prefer DB's canonical event type name ("Practice 1") over utils ("Free Practice 1")
+	const sessionName =
+		eventType !== null ? await getEventTypeName(eventType) : "";
 
 	// Create session result with session type (using only OfficialName)
 	const sessionResult: SessionResults = {
@@ -304,17 +309,43 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 	};
 
 	const db = await getDb();
-	const result = await db.execute(
-		"SELECT id FROM events WHERE start_time > unixepoch() AND event_type_id != 1 ORDER BY start_time LIMIT 1",
-	);
-
-	const nextEvent =
-		result.rows.length > 0 ? { id: result.rows[0].id as number } : undefined;
-
-	if (!nextEvent) {
-		console.warn("No upcoming event found in database");
-	} else {
-		await storeEventResult(nextEvent.id, path, sessionResult);
+	// Try to store results against the correct event (matching meeting name and type)
+	try {
+		if (eventType !== null) {
+			const exact = await db.execute({
+				sql: "SELECT id FROM events WHERE meeting_name = ? AND event_type_id = ? LIMIT 1",
+				args: [sessionInfoResponse.Meeting.OfficialName, eventType],
+			});
+			if (exact.rows.length > 0) {
+				await storeEventResult(exact.rows[0].id as number, path, sessionResult);
+			} else {
+				// Fallback: try by meeting name only (closest by start time could be added later)
+				const byName = await db.execute({
+					sql: "SELECT id FROM events WHERE meeting_name = ? LIMIT 1",
+					args: [sessionInfoResponse.Meeting.OfficialName],
+				});
+				if (byName.rows.length > 0) {
+					await storeEventResult(
+						byName.rows[0].id as number,
+						path,
+						sessionResult,
+					);
+				} else {
+					console.warn(
+						"Could not find matching event to store results for",
+						sessionInfoResponse.Meeting.OfficialName,
+						eventType,
+					);
+				}
+			}
+		} else {
+			console.warn(
+				"Unknown session type in path, skipping result storage for:",
+				path,
+			);
+		}
+	} catch (e) {
+		console.error("Error while storing event result: ", e);
 	}
 
 	return sessionResult;
