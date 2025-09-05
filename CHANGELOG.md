@@ -1,3 +1,10 @@
+## [1.4.2](https://github.com/obviyus/HamVerBot/compare/v1.4.1...v1.4.2) (2025-09-05)
+
+
+### Bug Fixes
+
+* normalize session key for sprint qualifying event type ([e09547a](https://github.com/obviyus/HamVerBot/commit/e09547a3544472fba1f0b9ff9b2f5cfda15e9526))
+
 ## [1.4.1](https://github.com/obviyus/HamVerBot/compare/v1.4.0...v1.4.1) (2025-06-17)
 
 
