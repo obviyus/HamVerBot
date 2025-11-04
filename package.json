@@ -4,7 +4,8 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
-		"start": "bun run src/index.ts"
+		"start": "bun run src/index.ts",
+		"build": "bun build src/index.ts --minify --target bun --outfile hamverbot.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.3",
