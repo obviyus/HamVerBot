@@ -251,6 +251,24 @@ function initEventListeners(
 	nickname: string,
 	nickPassword?: string,
 ): void {
+	// Bun >=1.1.27 can emit idle timeouts even with active traffic; disable the raw socket timeout.
+	client.on("socket connected", () => {
+		const transport = (
+			client as unknown as {
+				connection?: {
+					transport?: {
+						socket?: { setTimeout?: (timeout: number) => void };
+					};
+				};
+			}
+		).connection?.transport;
+		const rawSocket = transport?.socket;
+		if (rawSocket?.setTimeout) {
+			rawSocket.setTimeout(0);
+			console.log("Disabled socket idle timeout on IRC connection");
+		}
+	});
+
 	// Handle successful registration with the server
 	client.on("registered", () => {
 		console.log("Connected to IRC server...");
