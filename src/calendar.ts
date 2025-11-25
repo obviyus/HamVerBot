@@ -1,7 +1,6 @@
 import * as ical from "node-ical";
-import { storeEvents } from "~/database";
 import type { Event } from "~/database";
-import { EventType } from "~/database";
+import { EventType, storeEvents } from "~/database";
 
 // Helper function to determine event type from summary
 // Simplified determineEventType
@@ -10,7 +9,9 @@ function determineEventType(summary: string): EventType | null {
 
 	// Order patterns from most specific to least specific
 	const eventTypePatterns: [string, EventType][] = [
-		["sprint qualifying", EventType.SprintQualifying], // Most specific first
+		["sprint qualifying", EventType.SprintQualifying], // Full name
+		["sprint quali", EventType.SprintQualifying], // Truncated version from ICS
+		["sprint race", EventType.Sprint], // Distinguish from Sprint Qualifying
 		["qualifying", EventType.Qualifying],
 		["practice 1", EventType.FreePractice1],
 		["fp1", EventType.FreePractice1],
@@ -18,7 +19,7 @@ function determineEventType(summary: string): EventType | null {
 		["fp2", EventType.FreePractice2],
 		["practice 3", EventType.FreePractice3],
 		["fp3", EventType.FreePractice3],
-		["sprint", EventType.Sprint], // Check 'sprint' after 'sprint qualifying'
+		["sprint", EventType.Sprint], // Check 'sprint' after more specific patterns
 		["race", EventType.Race],
 		["livery", EventType.LiveryReveal],
 	];
