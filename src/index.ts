@@ -1,9 +1,9 @@
+import { fetchF1Calendar } from "~/calendar";
 import { config as appConfig } from "~/config";
+import { getLatestPath } from "~/database";
+import { fetchDriverList, fetchResults } from "~/fetch";
 import { getClient, initIrcClient } from "~/irc";
 import { scheduleJobs } from "~/worker";
-import { fetchF1Calendar } from "~/calendar";
-import { fetchDriverList, fetchResults } from "~/fetch";
-import { getLatestPath } from "~/database";
 
 async function main() {
 	const nickname = appConfig.irc.nickname;
