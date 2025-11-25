@@ -1,5 +1,4 @@
 import { createClient } from "@libsql/client";
-import { readCurrentEvent } from "~/fetch";
 
 export enum EventType {
 	LiveryReveal = 1,
@@ -336,6 +335,7 @@ export async function getLatestPath(): Promise<string | null> {
 		);
 
 		if (result.rows.length === 0) {
+			const { readCurrentEvent } = await import("~/fetch");
 			const { path, isComplete } = await readCurrentEvent();
 			if (isComplete) {
 				return path;
