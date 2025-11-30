@@ -1,6 +1,6 @@
-import { EventType, getAllChannels } from "./database";
 import IRC from "irc-framework";
 import { config as appConfig } from "./config";
+import { getAllChannels } from "./database";
 import { handleIrcMessage } from "./message";
 
 type Client = IRC.Client;

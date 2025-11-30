@@ -1,14 +1,11 @@
-import { EventType, getLatestPath, getNextEvent } from "./database";
+import type { EventType } from "~/types/event-type";
 import {
-        fetchResults,
-        returnWdcStandings,
-        returnWccStandings,
-} from "./fetch";
-import {
-        eventTypeToEmoji,
-        eventTypeToString,
-        stringToEventType,
+	eventTypeToEmoji,
+	eventTypeToString,
+	stringToEventType,
 } from "~/utils/events";
+import { getLatestPath, getNextEvent } from "./database";
+import { fetchResults, returnWccStandings, returnWdcStandings } from "./fetch";
 import { getClient } from "./irc";
 
 /**
@@ -58,14 +55,17 @@ function parseOffset(offsetStr: string): number | undefined {
 	if (parts.length === 1) {
 		// Just hours
 		const hours = Number.parseInt(parts[0], 10);
-		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign)) return undefined;
+		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign))
+			return undefined;
 		seconds = hours * 3600;
 	} else if (parts.length === 2) {
 		// Hours and minutes
 		const hours = Number.parseInt(parts[0], 10);
 		const minutes = Number.parseInt(parts[1], 10);
-		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign)) return undefined;
-		if (Number.isNaN(minutes) || !isValidMinutesOffset(minutes)) return undefined;
+		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign))
+			return undefined;
+		if (Number.isNaN(minutes) || !isValidMinutesOffset(minutes))
+			return undefined;
 		seconds = hours * 3600 + minutes * 60;
 	} else {
 		return undefined;
@@ -80,7 +80,8 @@ function parseOffset(offsetStr: string): number | undefined {
  * @returns True if the offset is within the range
  */
 function isValidHoursOffset(signedOffset: number): boolean {
-	const minHoursOffset = -12, maxHoursOffset = 14;
+	const minHoursOffset = -12,
+		maxHoursOffset = 14;
 
 	return signedOffset >= minHoursOffset && signedOffset <= maxHoursOffset;
 }
@@ -91,11 +92,11 @@ function isValidHoursOffset(signedOffset: number): boolean {
  * @returns True if minutes are within the range
  */
 function isValidMinutesOffset(minutes: number): boolean {
-	const minMinutesOffset = 0, maxMinutesOffset = 59;
+	const minMinutesOffset = 0,
+		maxMinutesOffset = 59;
 
 	return minutes >= minMinutesOffset && minutes <= maxMinutesOffset;
 }
-
 
 /**
  * Build a time string for an event

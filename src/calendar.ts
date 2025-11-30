@@ -1,6 +1,7 @@
 import * as ical from "node-ical";
 import type { Event } from "~/database";
-import { EventType, storeEvents } from "~/database";
+import { storeEvents } from "~/database";
+import { EventType } from "~/types/event-type";
 
 // Helper function to determine event type from summary
 // Simplified determineEventType

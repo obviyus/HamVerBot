@@ -1,16 +1,5 @@
 import { createClient } from "@libsql/client";
-
-export enum EventType {
-	LiveryReveal = 1,
-	FreePractice1 = 2,
-	FreePractice2 = 3,
-	FreePractice3 = 4,
-	Qualifying = 5,
-	Sprint = 6,
-	Race = 7,
-	SprintQualifying = 8,
-}
-
+import { EventType } from "~/types/event-type";
 export interface Event {
 	meetingName: string;
 	eventTypeId: EventType;
