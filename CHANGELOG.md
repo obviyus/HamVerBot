@@ -1,3 +1,13 @@
+## [1.4.4](https://github.com/obviyus/HamVerBot/compare/v1.4.3...v1.4.4) (2025-11-30)
+
+
+### Bug Fixes
+
+* correct package manager command in build workflow ([c7fadda](https://github.com/obviyus/HamVerBot/commit/c7fadda4ed89c17f4a337dd099b6205afad7d7b2))
+* disable bun idle timeouts ([50afbcc](https://github.com/obviyus/HamVerBot/commit/50afbcccf4aed046860d6d4a6407e0b15d9458ab))
+* import dynamically to avoid circular dependency ([2d4154d](https://github.com/obviyus/HamVerBot/commit/2d4154d01ee4336fbab0ffc844f43c449638c949))
+* more robust matching for event types ([05c4790](https://github.com/obviyus/HamVerBot/commit/05c47901f0d3d376a2537cfa3f4a088b01975b46))
+
 ## [1.4.3](https://github.com/obviyus/HamVerBot/compare/v1.4.2...v1.4.3) (2025-09-05)
 
 
