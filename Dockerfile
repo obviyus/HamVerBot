@@ -1,15 +1,16 @@
-FROM oven/bun:1.1.26-slim
+FROM oven/bun:latest AS build
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json bun.lock ./
-
-# Install dependencies
+COPY package.json bun.lock tsconfig.json ./
 RUN bun install --frozen-lockfile
 
-# Copy source code
-COPY . .
+COPY src ./src
+RUN bun build ./src/index.ts --outdir ./dist --minify --target bun --sourcemap=inline
 
-# Set the entry point to run the application with bun start
-CMD ["bun", "start"]
+FROM oven/bun:latest AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/dist ./dist
+CMD ["bun", "dist/index.js"]
