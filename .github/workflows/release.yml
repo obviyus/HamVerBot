@@ -27,6 +27,7 @@ jobs:
           semantic-release
 
   build:
+    needs: release
     strategy:
       fail-fast: false
       matrix:
