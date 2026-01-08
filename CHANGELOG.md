@@ -1,3 +1,11 @@
+## [1.4.5](https://github.com/obviyus/HamVerBot/compare/v1.4.4...v1.4.5) (2026-01-08)
+
+
+### Bug Fixes
+
+* **irc:** pass nickserv password for sasl ([914b55a](https://github.com/obviyus/HamVerBot/commit/914b55a85ee76801efc9001b9585e437077dce4c))
+* **irc:** rejoin channels after reconnect auth ([d6f2b71](https://github.com/obviyus/HamVerBot/commit/d6f2b711f0bafe18134eee2ca8f327f7ec1a1590))
+
 ## [1.4.4](https://github.com/obviyus/HamVerBot/compare/v1.4.3...v1.4.4) (2025-11-30)
 
 
