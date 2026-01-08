@@ -1,0 +1,17 @@
+services:
+  hamverbot:
+    image: ghcr.io/obviyus/hamverbot:latest
+    container_name: hamverbot
+    restart: unless-stopped
+    env_file:
+      - .env
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --label-enable --cleanup --interval 300
