@@ -44,6 +44,7 @@ async function main() {
 			username: appConfig.irc.nickname,
 			realname: appConfig.irc.realname,
 			password: appConfig.irc.password,
+			nickPassword: appConfig.irc.nickPassword,
 			secure: appConfig.irc.useTls,
 			channels: appConfig.irc.channels,
 		});
