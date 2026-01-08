@@ -1,3 +1,10 @@
+## [1.4.6](https://github.com/obviyus/HamVerBot/compare/v1.4.5...v1.4.6) (2026-01-08)
+
+
+### Bug Fixes
+
+* remove duplicate actions ([dfed616](https://github.com/obviyus/HamVerBot/commit/dfed61674bc2cba02ba6630e456e894d3e56d246))
+
 ## [1.4.5](https://github.com/obviyus/HamVerBot/compare/v1.4.4...v1.4.5) (2026-01-08)
 
 
