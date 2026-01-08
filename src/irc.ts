@@ -105,6 +105,12 @@ let isAuthenticated = false;
 // Store authentication callbacks
 const authCallbacks: (() => void)[] = [];
 
+// Track whether a join callback is registered for the next auth cycle.
+let joinOnAuthRegistered = false;
+
+// Store configured channels for reconnect joins.
+let configuredChannels: string[] = [];
+
 /**
  * Register a callback to be executed after authentication
  * @param callback - Function to call after authentication completes
@@ -117,6 +123,25 @@ export function onAuthenticated(callback: () => void): void {
 		// Otherwise, store for later execution
 		authCallbacks.push(callback);
 	}
+}
+
+/**
+ * Ensure we re-join channels after authentication.
+ */
+function registerJoinOnAuth(
+	getChannels: () => Promise<string[]>,
+	reason: string,
+): void {
+	if (joinOnAuthRegistered) return;
+	joinOnAuthRegistered = true;
+
+	// AIDEV-NOTE: Re-register join-on-auth per reconnect; auth callbacks are one-shot.
+	onAuthenticated(async () => {
+		joinOnAuthRegistered = false;
+		console.log(`Authentication complete (${reason}), joining channels...`);
+		const channels = await getChannels();
+		joinChannels(channels);
+	});
 }
 
 /**
@@ -195,6 +220,7 @@ export async function initIrcClient(config: {
 }): Promise<Client> {
 	// Create a new client instance
 	ircClient = new IRC.Client();
+	configuredChannels = config.channels || [];
 
 	// Debug logging for configuration
 	console.log("IRC Configuration:");
@@ -209,13 +235,11 @@ export async function initIrcClient(config: {
 			: undefined;
 
 	// Register channel joining as an authentication callback
-	onAuthenticated(async () => {
-		console.log("Authentication complete, joining channels...");
+	registerJoinOnAuth(async () => {
 		const dbChannels = await getAllChannels();
-		const configChannels = config.channels || [];
-		const allChannels = configChannels.concat(dbChannels);
-		joinChannels(allChannels);
-	});
+		const allChannels = configuredChannels.concat(dbChannels);
+		return allChannels;
+	}, "initial connect");
 
 	// Connect to the IRC server
 	ircClient.connect({
@@ -365,8 +389,8 @@ function initEventListeners(
 			"Auto reconnect is enabled, will attempt to reconnect shortly...",
 		);
 
-		// Clear any existing auth callbacks to prevent duplicates
-		authCallbacks.length = 0;
+		// Allow join-on-auth to be registered for the next connection
+		joinOnAuthRegistered = false;
 	});
 
 	// Handle reconnections
@@ -375,20 +399,16 @@ function initEventListeners(
 		console.log(
 			`Reconnecting to IRC server in ${options.wait / 1000} seconds...`,
 		);
+		registerJoinOnAuth(async () => {
+			const dbChannels = await getAllChannels();
+			const allChannels = configuredChannels.concat(dbChannels);
+			return allChannels;
+		}, "reconnect");
 	});
 
 	// Handle successful reconnection
 	client.on("connected", async () => {
 		console.log("Successfully reconnected to IRC server");
-
-		// If we were previously authenticated, we need to rejoin channels
-		if (isAuthenticated) {
-			console.log("Rejoining channels after reconnection...");
-			const dbChannels = await getAllChannels();
-			const configChannels = appConfig.irc.channels || [];
-			const allChannels = configChannels.concat(dbChannels);
-			joinChannels(allChannels);
-		}
 	});
 
 	// Handle ping timeouts
@@ -621,6 +641,7 @@ export async function attemptManualReconnect(): Promise<boolean> {
 
 		// Create a new client instance
 		ircClient = new IRC.Client();
+		configuredChannels = appConfig.irc.channels || [];
 
 		// Re-initialize event listeners
 		initEventListeners(
@@ -639,13 +660,11 @@ export async function attemptManualReconnect(): Promise<boolean> {
 				: undefined;
 
 		// Register channel joining as an authentication callback
-		onAuthenticated(async () => {
-			console.log("Authentication complete, rejoining channels...");
+		registerJoinOnAuth(async () => {
 			const dbChannels = await getAllChannels();
-			const configChannels = appConfig.irc.channels;
-			const allChannels = configChannels.concat(dbChannels);
-			joinChannels(allChannels);
-		});
+			const allChannels = configuredChannels.concat(dbChannels);
+			return allChannels;
+		}, "manual reconnect");
 
 		// Reconnect with the same configuration
 		await ircClient.connect({
