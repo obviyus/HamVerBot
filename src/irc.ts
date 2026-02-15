@@ -455,7 +455,9 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		// Handle commands
 		if (event.message.startsWith(appConfig.irc.commandPrefix)) {
 			const commandText = event.message.slice(appConfig.irc.commandPrefix.length);
-			handleIrcMessage(commandText, event.target);
+			void handleIrcMessage(commandText, event.target).catch((error) => {
+				console.error("Error handling channel command:", error);
+			});
 		}
 	});
 
@@ -466,7 +468,9 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 			// Handle private message commands
 			if (event.message.startsWith(appConfig.irc.commandPrefix)) {
 				const commandText = event.message.slice(appConfig.irc.commandPrefix.length);
-				handleIrcMessage(commandText, event.nick);
+				void handleIrcMessage(commandText, event.nick).catch((error) => {
+					console.error("Error handling private command:", error);
+				});
 			}
 		}
 	});
@@ -647,7 +651,7 @@ export async function attemptManualReconnect(): Promise<boolean> {
 		}, "manual reconnect");
 
 		// Reconnect with the same configuration
-		await ircClient.connect({
+		ircClient.connect({
 			host: appConfig.irc.server,
 			port: appConfig.irc.port,
 			nick: appConfig.irc.nickname,
@@ -664,7 +668,7 @@ export async function attemptManualReconnect(): Promise<boolean> {
 			account: saslAccount,
 		});
 
-		console.log("Manual reconnection successful");
+		console.log("Manual reconnection initiated");
 		return true;
 	} catch (error) {
 		console.error("Manual reconnection failed:", error);

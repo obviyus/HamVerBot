@@ -142,7 +142,7 @@ export async function initDatabase(): Promise<ReturnType<typeof createClient>> {
 
 		return client;
 	} catch (error) {
-		console.error(`Failed to initialize database: ${error}`);
+		console.error("Failed to initialize database:", error);
 		throw error;
 	}
 }
@@ -157,7 +157,7 @@ export async function getDb(): Promise<ReturnType<typeof createClient>> {
 
 export async function closeDb(): Promise<void> {
 	if (dbInstance) {
-		await dbInstance.close();
+		dbInstance.close();
 		dbInstance = null;
 	}
 }
@@ -183,7 +183,7 @@ export async function storeEvents(events: Event[]): Promise<void> {
 
 		console.log(`Stored ${events.length} events in the database`);
 	} catch (error) {
-		console.error(`Error storing events: ${error}`);
+		console.error("Error storing events:", error);
 	}
 }
 
@@ -219,7 +219,7 @@ export async function storeDriver(driver: Driver): Promise<void> {
 			],
 		});
 	} catch (error) {
-		console.error(`Error storing driver: ${error}`);
+		console.error("Error storing driver:", error);
 	}
 }
 
@@ -252,7 +252,7 @@ export async function getAllDrivers(): Promise<Driver[]> {
 			teamColor: row.teamColor as string,
 		}));
 	} catch (error) {
-		console.error(`Error getting all drivers: ${error}`);
+		console.error("Error getting all drivers:", error);
 		return [];
 	}
 }
@@ -300,7 +300,7 @@ export async function getNextEvent(eventType?: EventType): Promise<{
 			startTime: row.start_time as number,
 		};
 	} catch (error) {
-		console.error(`Error getting next event: ${error}`);
+		console.error("Error getting next event:", error);
 		if (error instanceof Error) {
 			console.error(`Error stack: ${error.stack}`);
 		}
@@ -325,7 +325,7 @@ export async function getLatestPath(): Promise<string | null> {
 
 		return result.rows[0].path as string;
 	} catch (error) {
-		console.error(`Error getting latest path: ${error}`);
+		console.error("Error getting latest path:", error);
 		return null;
 	}
 }
@@ -341,7 +341,7 @@ export async function isEventDelivered(path: string): Promise<boolean> {
 
 		return result.rows.length > 0;
 	} catch (error) {
-		console.error(`Error checking if event is delivered: ${error}`);
+		console.error("Error checking if event is delivered:", error);
 		return false;
 	}
 }
@@ -355,7 +355,7 @@ export async function addChannel(channelName: string): Promise<void> {
 			args: [channelName],
 		});
 	} catch (error) {
-		console.error(`Error adding channel: ${error}`);
+		console.error("Error adding channel:", error);
 	}
 }
 
@@ -365,7 +365,7 @@ export async function getAllChannels(): Promise<string[]> {
 		const result = await db.execute("SELECT name FROM channels");
 		return result.rows.map((row) => row.name as string);
 	} catch (error) {
-		console.error(`Error getting all channels: ${error}`);
+		console.error("Error getting all channels:", error);
 		return [];
 	}
 }
@@ -378,7 +378,7 @@ export async function storeEventResult(eventId: number, path: string, data: obje
 			args: [eventId, path, JSON.stringify(data)],
 		});
 	} catch (error) {
-		console.error(`Error storing event result: ${error}`);
+		console.error("Error storing event result:", error);
 	}
 }
 
@@ -403,7 +403,7 @@ export async function getEventBySlug(slug: string): Promise<DbEvent | null> {
 			startTime: row.start_time as number,
 		};
 	} catch (error) {
-		console.error(`Error getting event by slug: ${error}`);
+		console.error("Error getting event by slug:", error);
 		return null;
 	}
 }
@@ -419,7 +419,7 @@ export async function getEventTypeName(eventTypeId: EventType): Promise<string> 
 
 		return result.rows.length > 0 ? (result.rows[0].name as string) : "Unknown";
 	} catch (error) {
-		console.error(`Error getting event type name: ${error}`);
+		console.error("Error getting event type name:", error);
 		return "Unknown";
 	}
 }
@@ -436,7 +436,7 @@ export async function storeChampionshipStandings(type: number, data: object): Pr
 			args: [type, JSON.stringify(data)],
 		});
 	} catch (error) {
-		console.error(`Error storing championship standings: ${error}`);
+		console.error("Error storing championship standings:", error);
 	}
 }
 
@@ -451,7 +451,7 @@ export async function getChampionshipStandings(type: number): Promise<object | n
 
 		return result.rows.length > 0 ? JSON.parse(result.rows[0].data as string) : null;
 	} catch (error) {
-		console.error(`Error getting championship standings: ${error}`);
+		console.error("Error getting championship standings:", error);
 		return null;
 	}
 }

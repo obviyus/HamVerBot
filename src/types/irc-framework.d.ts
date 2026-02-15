@@ -312,7 +312,7 @@ declare module "irc-framework" {
 		on(event: "privmsg", listener: (event: IrcMessageEvent) => void): this;
 		on(event: "notice", listener: (event: IrcMessageEvent) => void): this;
 		on(event: "action", listener: (event: IrcMessageEvent) => void): this;
-		on(event: "error", listener: (event: IrcErrorEvent | unknown) => void): this;
+		on(event: "error", listener: (event: IrcErrorEvent) => void): this;
 		on(event: "close", listener: (event: IrcCloseEvent) => void): this;
 		on(event: string, listener: (...args: unknown[]) => void): this;
 	}

@@ -92,7 +92,7 @@ export async function fetchDriverList(path: string): Promise<void> {
 		let driversProcessed = 0;
 		for (const driver of drivers) {
 			try {
-				storeDriver(driver);
+				await storeDriver(driver);
 				driversProcessed++;
 			} catch (error) {
 				console.error(`Error storing driver ${driver.fullName}:`, error);
@@ -238,6 +238,9 @@ export async function fetchResults(path: string): Promise<string> {
 			console.log(`Using cached results for ${path}`);
 			try {
 				const row = result.rows[0];
+				if (typeof row.meeting_name !== "string" || typeof row.event_type_name !== "string") {
+					throw new Error("Cached result metadata is invalid");
+				}
 				const data = JSON.parse(row.data as string) as SessionResults;
 
 				// Update the title to include the event type from the database
@@ -433,7 +436,7 @@ export async function fetchWccStandings(): Promise<CurrentConstructorStandings |
 		};
 
 		// Store the standings in the database
-		storeChampionshipStandings(1, standings);
+		await storeChampionshipStandings(1, standings);
 
 		return standings;
 	} catch (error) {
@@ -458,7 +461,7 @@ export async function fetchWdcStandings(): Promise<CurrentDriverStandings | null
 		};
 
 		// Store the standings in the database
-		storeChampionshipStandings(0, standings);
+		await storeChampionshipStandings(0, standings);
 
 		return standings;
 	} catch (error) {
