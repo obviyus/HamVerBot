@@ -1,3 +1,11 @@
+## [1.4.8](https://github.com/obviyus/HamVerBot/compare/v1.4.7...v1.4.8) (2026-02-15)
+
+
+### Bug Fixes
+
+* **calendar:** guard parsed ics event fields ([306c2bb](https://github.com/obviyus/HamVerBot/commit/306c2bbc683d41193deef13edb9d1af3b12f8826))
+* **lint:** resolve type-aware async warnings ([82550b4](https://github.com/obviyus/HamVerBot/commit/82550b46394b2567d9fce070ecf1ce74abc65682))
+
 ## [1.4.7](https://github.com/obviyus/HamVerBot/compare/v1.4.6...v1.4.7) (2026-02-15)
 
 
