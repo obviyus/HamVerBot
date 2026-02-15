@@ -1,9 +1,5 @@
 import type { EventType } from "~/types/event-type";
-import {
-	eventTypeToEmoji,
-	eventTypeToString,
-	stringToEventType,
-} from "~/utils/events";
+import { eventTypeToEmoji, eventTypeToString, stringToEventType } from "~/utils/events";
 import { getLatestPath, getNextEvent } from "./database";
 import { fetchResults, returnWccStandings, returnWdcStandings } from "./fetch";
 import { getClient } from "./irc";
@@ -45,8 +41,7 @@ function parseOffset(offsetStr: string): number | undefined {
 	const sign = firstChar === "-" ? -1 : 1;
 
 	// Skip sign character if present
-	const offsetValue =
-		firstChar === "+" || firstChar === "-" ? offsetStr.substring(1) : offsetStr;
+	const offsetValue = firstChar === "+" || firstChar === "-" ? offsetStr.substring(1) : offsetStr;
 
 	// Parse hours and optional minutes
 	const parts = offsetValue.split(":");
@@ -55,17 +50,14 @@ function parseOffset(offsetStr: string): number | undefined {
 	if (parts.length === 1) {
 		// Just hours
 		const hours = Number.parseInt(parts[0], 10);
-		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign))
-			return undefined;
+		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign)) return undefined;
 		seconds = hours * 3600;
 	} else if (parts.length === 2) {
 		// Hours and minutes
 		const hours = Number.parseInt(parts[0], 10);
 		const minutes = Number.parseInt(parts[1], 10);
-		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign))
-			return undefined;
-		if (Number.isNaN(minutes) || !isValidMinutesOffset(minutes))
-			return undefined;
+		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign)) return undefined;
+		if (Number.isNaN(minutes) || !isValidMinutesOffset(minutes)) return undefined;
 		seconds = hours * 3600 + minutes * 60;
 	} else {
 		return undefined;
@@ -105,11 +97,7 @@ function isValidMinutesOffset(minutes: number): boolean {
  * @param timezone - Optional timezone offset in minutes
  * @returns The formatted time string
  */
-function buildTimeString(
-	eventName: string,
-	eventTime: number,
-	timezone?: number,
-): string {
+function buildTimeString(eventName: string, eventTime: number, timezone?: number): string {
 	const eventDate = new Date(eventTime * 1000);
 
 	if (timezone !== undefined) {
@@ -181,10 +169,7 @@ function pluralize(word: string, count: number): string {
 /**
  * Get next event and format response message
  */
-async function getNextEventMessage(
-	eventType?: EventType,
-	timezone?: number,
-): Promise<string> {
+async function getNextEventMessage(eventType?: EventType, timezone?: number): Promise<string> {
 	const event = await getNextEvent(eventType);
 
 	if (!event) {
@@ -201,10 +186,7 @@ async function getNextEventMessage(
 }
 
 // Command handler functions
-const commandHandlers: Record<
-	string,
-	(args: string[], target: string) => Promise<string>
-> = {
+const commandHandlers: Record<string, (args: string[], target: string) => Promise<string>> = {
 	ping: async () => "pong",
 
 	next: async (args) => {
@@ -270,10 +252,7 @@ const commandAliases: Record<string, string> = {
  * @param message - The message text
  * @param target - The target channel or user
  */
-export async function handleIrcMessage(
-	message: string,
-	target: string,
-): Promise<void> {
+export async function handleIrcMessage(message: string, target: string): Promise<void> {
 	console.log(`Processing command: ${message} from ${target}`);
 
 	const args = message.toLowerCase().split(/\s+/);

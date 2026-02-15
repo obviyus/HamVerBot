@@ -117,9 +117,7 @@ export async function initDatabase(): Promise<ReturnType<typeof createClient>> {
 		`);
 
 		// Check if event types already exist
-		const eventTypeCount = await client.execute(
-			"SELECT COUNT(*) as count FROM event_type",
-		);
+		const eventTypeCount = await client.execute("SELECT COUNT(*) as count FROM event_type");
 
 		// Only insert event types if none exist
 		if (eventTypeCount.rows[0].count === 0) {
@@ -179,12 +177,7 @@ export async function storeEvents(events: Event[]): Promise<void> {
 						meeting_name = excluded.meeting_name,
 						event_type_id = excluded.event_type_id,
 						start_time = excluded.start_time`,
-				args: [
-					event.meetingName,
-					event.eventTypeId,
-					event.startTime,
-					event.eventSlug,
-				],
+				args: [event.meetingName, event.eventTypeId, event.startTime, event.eventSlug],
 			});
 		}
 
@@ -319,9 +312,7 @@ export async function getNextEvent(eventType?: EventType): Promise<{
 export async function getLatestPath(): Promise<string | null> {
 	try {
 		const db = await getDb();
-		const result = await db.execute(
-			"SELECT path FROM results ORDER BY create_time DESC LIMIT 1",
-		);
+		const result = await db.execute("SELECT path FROM results ORDER BY create_time DESC LIMIT 1");
 
 		if (result.rows.length === 0) {
 			const { readCurrentEvent } = await import("~/fetch");
@@ -379,11 +370,7 @@ export async function getAllChannels(): Promise<string[]> {
 	}
 }
 
-export async function storeEventResult(
-	eventId: number,
-	path: string,
-	data: object,
-): Promise<void> {
+export async function storeEventResult(eventId: number, path: string, data: object): Promise<void> {
 	try {
 		const db = await getDb();
 		await db.execute({
@@ -422,9 +409,7 @@ export async function getEventBySlug(slug: string): Promise<DbEvent | null> {
 }
 
 // Get event type name
-export async function getEventTypeName(
-	eventTypeId: EventType,
-): Promise<string> {
+export async function getEventTypeName(eventTypeId: EventType): Promise<string> {
 	try {
 		const db = await getDb();
 		const result = await db.execute({
@@ -439,10 +424,7 @@ export async function getEventTypeName(
 	}
 }
 
-export async function storeChampionshipStandings(
-	type: number,
-	data: object,
-): Promise<void> {
+export async function storeChampionshipStandings(type: number, data: object): Promise<void> {
 	try {
 		const db = await getDb();
 		await db.execute({
@@ -459,9 +441,7 @@ export async function storeChampionshipStandings(
 }
 
 // Get championship standings
-export async function getChampionshipStandings(
-	type: number,
-): Promise<object | null> {
+export async function getChampionshipStandings(type: number): Promise<object | null> {
 	try {
 		const db = await getDb();
 		const result = await db.execute({
@@ -469,9 +449,7 @@ export async function getChampionshipStandings(
 			args: [type],
 		});
 
-		return result.rows.length > 0
-			? JSON.parse(result.rows[0].data as string)
-			: null;
+		return result.rows.length > 0 ? JSON.parse(result.rows[0].data as string) : null;
 	} catch (error) {
 		console.error(`Error getting championship standings: ${error}`);
 		return null;

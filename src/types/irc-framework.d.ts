@@ -129,13 +129,7 @@ declare module "irc-framework" {
 		/**
 		 * Add middleware to handle events
 		 */
-		use(
-			middleware: (
-				client: Client,
-				rawEvents: unknown,
-				parsedEvents: unknown,
-			) => void,
-		): void;
+		use(middleware: (client: Client, rawEvents: unknown, parsedEvents: unknown) => void): void;
 
 		/**
 		 * Send a raw line to the IRC server
@@ -170,11 +164,7 @@ declare module "irc-framework" {
 		/**
 		 * Send a notice to a target
 		 */
-		notice(
-			target: string,
-			message: string,
-			tags?: Record<string, string>,
-		): void;
+		notice(target: string, message: string, tags?: Record<string, string>): void;
 
 		/**
 		 * Send a tagged message without content to a target
@@ -272,26 +262,17 @@ declare module "irc-framework" {
 		/**
 		 * Call a callback when an incoming notice message matches a regex
 		 */
-		matchNotice(
-			matchRegex: RegExp,
-			callback: (event: Record<string, unknown>) => void,
-		): void;
+		matchNotice(matchRegex: RegExp, callback: (event: Record<string, unknown>) => void): void;
 
 		/**
 		 * Call a callback when an incoming plain message matches a regex
 		 */
-		matchMessage(
-			matchRegex: RegExp,
-			callback: (event: Record<string, unknown>) => void,
-		): void;
+		matchMessage(matchRegex: RegExp, callback: (event: Record<string, unknown>) => void): void;
 
 		/**
 		 * Call a callback when an incoming action message matches a regex
 		 */
-		matchAction(
-			matchRegex: RegExp,
-			callback: (event: Record<string, unknown>) => void,
-		): void;
+		matchAction(matchRegex: RegExp, callback: (event: Record<string, unknown>) => void): void;
 
 		/**
 		 * Add a target to the list of targets being monitored
@@ -326,18 +307,12 @@ declare module "irc-framework" {
 		/**
 		 * Event handler
 		 */
-		on(
-			event: "registered",
-			listener: (event: IrcRegisteredEvent) => void,
-		): this;
+		on(event: "registered", listener: (event: IrcRegisteredEvent) => void): this;
 		on(event: "message", listener: (event: IrcMessageEvent) => void): this;
 		on(event: "privmsg", listener: (event: IrcMessageEvent) => void): this;
 		on(event: "notice", listener: (event: IrcMessageEvent) => void): this;
 		on(event: "action", listener: (event: IrcMessageEvent) => void): this;
-		on(
-			event: "error",
-			listener: (event: IrcErrorEvent | unknown) => void,
-		): this;
+		on(event: "error", listener: (event: IrcErrorEvent | unknown) => void): this;
 		on(event: "close", listener: (event: IrcCloseEvent) => void): this;
 		on(event: string, listener: (...args: unknown[]) => void): this;
 	}

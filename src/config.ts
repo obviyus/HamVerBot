@@ -56,9 +56,7 @@ export function loadConfig(): AppConfig {
 
 	return {
 		irc: {
-			nickname:
-				process.env.IRC_NICKNAME ||
-				(isDevelopment ? "HamVerBot-Dev" : "HamVerBot"),
+			nickname: process.env.IRC_NICKNAME || (isDevelopment ? "HamVerBot-Dev" : "HamVerBot"),
 			nickPassword: process.env.IRC_NICK_PASSWORD || "password",
 			password: process.env.IRC_PASSWORD || "password",
 			realname: process.env.IRC_REALNAME || "Steward of #f1",
@@ -69,9 +67,7 @@ export function loadConfig(): AppConfig {
 			port: Number.parseInt(process.env.IRC_PORT || "6697", 10),
 			useTls: process.env.IRC_USE_TLS !== "false",
 
-			channels: (
-				process.env.IRC_CHANNELS || (isDevelopment ? "#obviyes" : "#f1")
-			).split(","),
+			channels: (process.env.IRC_CHANNELS || (isDevelopment ? "#obviyes" : "#f1")).split(","),
 
 			commandPrefix: process.env.IRC_COMMAND_PREFIX || "!",
 

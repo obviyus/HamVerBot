@@ -58,23 +58,22 @@ export async function fetchDriverList(path: string): Promise<void> {
 
 	try {
 		// The API response is an object where keys are racing numbers and values are driver data
-		const response =
-			await fetchJson<
-				Record<
-					string,
-					{
-						RacingNumber: string;
-						Reference: string;
-						FirstName: string;
-						LastName: string;
-						FullName: string;
-						BroadcastName: string;
-						Tla: string;
-						TeamName: string;
-						TeamColour: string;
-					}
-				>
-			>(driverListUrl);
+		const response = await fetchJson<
+			Record<
+				string,
+				{
+					RacingNumber: string;
+					Reference: string;
+					FirstName: string;
+					LastName: string;
+					FullName: string;
+					BroadcastName: string;
+					Tla: string;
+					TeamName: string;
+					TeamColour: string;
+				}
+			>
+		>(driverListUrl);
 
 		// Get all driver entries and process them in a single batch
 		const drivers: Driver[] = Object.values(response).map((driverData) => ({
@@ -145,9 +144,7 @@ interface TimingLine {
 /**
  * Extract driver position and timing data from F1 API response
  */
-async function extractPositionAndTiming(
-	data: Record<string, unknown>,
-): Promise<DriverStanding[]> {
+async function extractPositionAndTiming(data: Record<string, unknown>): Promise<DriverStanding[]> {
 	const lines = data.Lines as Record<string, TimingLine>;
 	if (!lines) {
 		throw new Error("Failed to extract lines from timing data");
@@ -183,9 +180,7 @@ async function extractPositionAndTiming(
 		// Find the driver using the lookup map
 		const driver = driversMap.get(racingNumber);
 		if (!driver) {
-			console.warn(
-				`Driver with racing number ${racingNumber} not found in database`,
-			);
+			console.warn(`Driver with racing number ${racingNumber} not found in database`);
 			continue;
 		}
 
@@ -195,9 +190,7 @@ async function extractPositionAndTiming(
 		// Get interval to position ahead
 		let difference: string | undefined;
 		if (driverData.Stats && Array.isArray(driverData.Stats)) {
-			const timeDiff = driverData.Stats.find(
-				(stat) => stat.TimeDifftoPositionAhead !== undefined,
-			);
+			const timeDiff = driverData.Stats.find((stat) => stat.TimeDifftoPositionAhead !== undefined);
 			if (timeDiff) {
 				difference = timeDiff.TimeDifftoPositionAhead;
 			}
@@ -253,10 +246,7 @@ export async function fetchResults(path: string): Promise<string> {
 					title: `${row.meeting_name}: ${row.event_type_name}`,
 				};
 			} catch (parseError) {
-				console.error(
-					"Error parsing cached results, fetching fresh data:",
-					parseError,
-				);
+				console.error("Error parsing cached results, fetching fresh data:", parseError);
 				sessionResult = await fetchFreshResults(path);
 			}
 		} else {
@@ -292,37 +282,36 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 	// Extract driver standings
 	const standings = await extractPositionAndTiming(timingData);
 
-    // Extract session type from path
-    // Example paths:
-    //   2025/.../2025-09-05_Practice_2/  -> practice2 -> fp2 -> FreePractice2
-    //   2025/.../2025-09-06_Qualifying/  -> qualifying -> Qualifying
-    //   2025/.../2025-09-07_Race/        -> race -> Race
-    //   2025/.../2025-09-06_Sprint_Shootout/ -> sprintshootout -> sprintqualifying
-    const sanitizedPath = path.replace(/\/+$/, "");
-    const lastSegment = sanitizedPath.split("/").filter(Boolean).pop() ?? "";
-    const parts = lastSegment.split("_").filter(Boolean);
-    if (parts.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(parts[0])) {
-        parts.shift(); // drop leading date component
-    }
-    // Join remaining parts without separators and lowercase
-    let normalizedKey = parts.join("").toLowerCase();
-    // Normalize known variants
-    if (normalizedKey === "practice1") normalizedKey = "fp1";
-    if (normalizedKey === "practice2") normalizedKey = "fp2";
-    if (normalizedKey === "practice3") normalizedKey = "fp3";
-    if (normalizedKey === "sprintshootout" || normalizedKey === "sprintshootoutqualifying") {
-        normalizedKey = "sprintqualifying";
-    }
+	// Extract session type from path
+	// Example paths:
+	//   2025/.../2025-09-05_Practice_2/  -> practice2 -> fp2 -> FreePractice2
+	//   2025/.../2025-09-06_Qualifying/  -> qualifying -> Qualifying
+	//   2025/.../2025-09-07_Race/        -> race -> Race
+	//   2025/.../2025-09-06_Sprint_Shootout/ -> sprintshootout -> sprintqualifying
+	const sanitizedPath = path.replace(/\/+$/, "");
+	const lastSegment = sanitizedPath.split("/").filter(Boolean).pop() ?? "";
+	const parts = lastSegment.split("_").filter(Boolean);
+	if (parts.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(parts[0])) {
+		parts.shift(); // drop leading date component
+	}
+	// Join remaining parts without separators and lowercase
+	let normalizedKey = parts.join("").toLowerCase();
+	// Normalize known variants
+	if (normalizedKey === "practice1") normalizedKey = "fp1";
+	if (normalizedKey === "practice2") normalizedKey = "fp2";
+	if (normalizedKey === "practice3") normalizedKey = "fp3";
+	if (normalizedKey === "sprintshootout" || normalizedKey === "sprintshootoutqualifying") {
+		normalizedKey = "sprintqualifying";
+	}
 
-    // Try strict mapping first, then fuzzy mapping as fallback
-    let eventType = normalizedKey ? sessionKeyToEventType(normalizedKey) : null;
-    if (eventType === null && normalizedKey) {
-        const fallback = stringToEventType(normalizedKey);
-        eventType = typeof fallback === "number" ? fallback : null;
-    }
+	// Try strict mapping first, then fuzzy mapping as fallback
+	let eventType = normalizedKey ? sessionKeyToEventType(normalizedKey) : null;
+	if (eventType === null && normalizedKey) {
+		const fallback = stringToEventType(normalizedKey);
+		eventType = typeof fallback === "number" ? fallback : null;
+	}
 	// Prefer DB's canonical event type name ("Practice 1") over utils ("Free Practice 1")
-	const sessionName =
-		eventType !== null ? await getEventTypeName(eventType) : "";
+	const sessionName = eventType !== null ? await getEventTypeName(eventType) : "";
 
 	// Create session result with session type (using only OfficialName)
 	const sessionResult: SessionResults = {
@@ -347,11 +336,7 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 					args: [sessionInfoResponse.Meeting.OfficialName],
 				});
 				if (byName.rows.length > 0) {
-					await storeEventResult(
-						byName.rows[0].id as number,
-						path,
-						sessionResult,
-					);
+					await storeEventResult(byName.rows[0].id as number, path, sessionResult);
 				} else {
 					console.warn(
 						"Could not find matching event to store results for",
@@ -361,10 +346,7 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 				}
 			}
 		} else {
-			console.warn(
-				"Unknown session type in path, skipping result storage for:",
-				path,
-			);
+			console.warn("Unknown session type in path, skipping result storage for:", path);
 		}
 	} catch (e) {
 		console.error("Error while storing event result: ", e);
@@ -417,10 +399,7 @@ async function fetchStandings<T extends object>(
 			try {
 				standings = JSON.parse(result.rows[0].data as string) as T;
 			} catch (error) {
-				console.error(
-					"Error parsing cached standings, fetching fresh data:",
-					error,
-				);
+				console.error("Error parsing cached standings, fetching fresh data:", error);
 				const response = await fetchJson<{ MRData: unknown }>(url);
 				standings = { MRData: response.MRData } as T;
 				await storeChampionshipStandings(type, standings);
@@ -572,9 +551,7 @@ export async function fetchNextEvent(): Promise<string | null> {
 		// Convert Unix timestamp to Date
 		const eventDate = new Date(startTime * 1000);
 
-		const timeToEventMinutes = Math.floor(
-			(eventDate.getTime() - Date.now()) / (1000 * 60),
-		);
+		const timeToEventMinutes = Math.floor((eventDate.getTime() - Date.now()) / (1000 * 60));
 		console.log(`Time to event: ${timeToEventMinutes} minutes`);
 
 		// Only notify if the event is starting in the next 5 minutes

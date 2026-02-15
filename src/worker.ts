@@ -53,29 +53,27 @@ export async function processJob(jobType: JobType) {
  * @returns A promise that resolves when the job is complete
  */
 async function resultWorker(): Promise<void> {
-    console.log(`Checking for new results at ${new Date().toISOString()}`);
+	console.log(`Checking for new results at ${new Date().toISOString()}`);
 
-    try {
-        const { path, isComplete } = await readCurrentEvent();
-        const delivered = await isEventDelivered(path);
+	try {
+		const { path, isComplete } = await readCurrentEvent();
+		const delivered = await isEventDelivered(path);
 
-        if (isComplete && !delivered) {
-            const standings = await fetchResults(path);
-            // Only broadcast if we successfully stored the result (marks delivered)
-            const deliveredNow = await isEventDelivered(path);
-            if (deliveredNow) {
-                await broadcast(standings);
-            } else {
-                console.log(
-                    `Results not stored for ${path}; skipping broadcast to avoid spam`,
-                );
-            }
-        }
-    } catch (error) {
-        console.error("Error in result worker:", error);
-        // Don't throw the error further, just log it
-        // This prevents the error from affecting the IRC connection
-    }
+		if (isComplete && !delivered) {
+			const standings = await fetchResults(path);
+			// Only broadcast if we successfully stored the result (marks delivered)
+			const deliveredNow = await isEventDelivered(path);
+			if (deliveredNow) {
+				await broadcast(standings);
+			} else {
+				console.log(`Results not stored for ${path}; skipping broadcast to avoid spam`);
+			}
+		}
+	} catch (error) {
+		console.error("Error in result worker:", error);
+		// Don't throw the error further, just log it
+		// This prevents the error from affecting the IRC connection
+	}
 }
 
 /**

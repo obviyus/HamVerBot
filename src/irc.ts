@@ -112,16 +112,9 @@ let joinOnAuthRegistered = false;
 // Store configured channels for reconnect joins.
 let configuredChannels: string[] = [];
 
-function shouldUseBunTlsIpv4Workaround(
-	server: string,
-	secure?: boolean,
-): boolean {
+function shouldUseBunTlsIpv4Workaround(server: string, secure?: boolean): boolean {
 	// AIDEV-NOTE: Bun TLS + Libera can throw a subject-destructure error unless IPv4 is forced.
-	return (
-		typeof Bun !== "undefined" &&
-		!!secure &&
-		LIBERA_HOST_REGEX.test(server)
-	);
+	return typeof Bun !== "undefined" && !!secure && LIBERA_HOST_REGEX.test(server);
 }
 
 /**
@@ -141,10 +134,7 @@ export function onAuthenticated(callback: () => void): void {
 /**
  * Ensure we re-join channels after authentication.
  */
-function registerJoinOnAuth(
-	getChannels: () => Promise<string[]>,
-	reason: string,
-): void {
+function registerJoinOnAuth(getChannels: () => Promise<string[]>, reason: string): void {
 	if (joinOnAuthRegistered) return;
 	joinOnAuthRegistered = true;
 
@@ -234,10 +224,7 @@ export async function initIrcClient(config: {
 	// Create a new client instance
 	ircClient = new IRC.Client();
 	configuredChannels = config.channels || [];
-	const useBunTlsIpv4Workaround = shouldUseBunTlsIpv4Workaround(
-		config.server,
-		config.secure,
-	);
+	const useBunTlsIpv4Workaround = shouldUseBunTlsIpv4Workaround(config.server, config.secure);
 
 	// Debug logging for configuration
 	console.log("IRC Configuration:");
@@ -245,9 +232,7 @@ export async function initIrcClient(config: {
 	console.log(`  Nickname: ${config.nickname}`);
 	console.log(`  TLS Enabled: ${config.secure ? "Yes" : "No"}`);
 	if (useBunTlsIpv4Workaround) {
-		console.warn(
-			"Applying Bun TLS workaround for Libera: forcing IPv4 transport",
-		);
+		console.warn("Applying Bun TLS workaround for Libera: forcing IPv4 transport");
 	}
 
 	// Configure SASL authentication if nickPassword is provided
@@ -293,11 +278,7 @@ export async function initIrcClient(config: {
  * @param nickname - The bot's nickname
  * @param nickPassword - The NickServ password (optional)
  */
-function initEventListeners(
-	client: Client,
-	nickname: string,
-	nickPassword?: string,
-): void {
+function initEventListeners(client: Client, nickname: string, nickPassword?: string): void {
 	// Bun >=1.1.27 can emit idle timeouts even with active traffic; disable the raw socket timeout.
 	client.on("socket connected", () => {
 		const transport = (
@@ -345,9 +326,7 @@ function initEventListeners(
 	// Handle SASL login events
 	client.on("loggedin", (event: unknown) => {
 		const loggedInEvent = event as LoggedInEvent;
-		console.log(
-			`Successfully authenticated with SASL as ${loggedInEvent.account}`,
-		);
+		console.log(`Successfully authenticated with SASL as ${loggedInEvent.account}`);
 		isAuthenticated = true;
 
 		// Set bot mode (+B) after successful authentication
@@ -389,9 +368,7 @@ function initEventListeners(
 
 	// Handle socket errors
 	client.on("socket close", (err: unknown) => {
-		const error = err as
-			| { message?: string; code?: string; errno?: number }
-			| undefined;
+		const error = err as { message?: string; code?: string; errno?: number } | undefined;
 		console.log("Socket closed:", error?.message || "No error");
 
 		// Log additional details if available
@@ -408,9 +385,7 @@ function initEventListeners(
 			"Connection status after socket close:",
 			client.connected ? "Still connected" : "Disconnected",
 		);
-		console.log(
-			"Auto reconnect is enabled, will attempt to reconnect shortly...",
-		);
+		console.log("Auto reconnect is enabled, will attempt to reconnect shortly...");
 
 		// Allow join-on-auth to be registered for the next connection
 		joinOnAuthRegistered = false;
@@ -419,9 +394,7 @@ function initEventListeners(
 	// Handle reconnections
 	client.on("reconnecting", (opts: unknown) => {
 		const options = opts as { wait: number };
-		console.log(
-			`Reconnecting to IRC server in ${options.wait / 1000} seconds...`,
-		);
+		console.log(`Reconnecting to IRC server in ${options.wait / 1000} seconds...`);
 		registerJoinOnAuth(async () => {
 			const dbChannels = await getAllChannels();
 			const allChannels = configuredChannels.concat(dbChannels);
@@ -465,18 +438,14 @@ function initEventListeners(
 			// Handle NickServ authentication failures
 			else if (event.message.includes("Invalid password")) {
 				console.error("NickServ authentication failed: Invalid password");
-				console.error(
-					"Please check your IRC_NICK_PASSWORD environment variable",
-				);
+				console.error("Please check your IRC_NICK_PASSWORD environment variable");
 
 				// Generate a random nickname as fallback
 				const altNick = `${nickname}_${Math.floor(Math.random() * 1000)}`;
 				console.log(`Switching to alternative nickname: ${altNick}`);
 				client.changeNick(altNick);
 			} else if (event.message.includes("This nickname is registered")) {
-				console.warn(
-					"This nickname is registered but we couldn't authenticate",
-				);
+				console.warn("This nickname is registered but we couldn't authenticate");
 				console.warn("Using the nickname anyway, but we might be disconnected");
 			}
 		} else {
@@ -485,9 +454,7 @@ function initEventListeners(
 
 		// Handle commands
 		if (event.message.startsWith(appConfig.irc.commandPrefix)) {
-			const commandText = event.message.slice(
-				appConfig.irc.commandPrefix.length,
-			);
+			const commandText = event.message.slice(appConfig.irc.commandPrefix.length);
 			handleIrcMessage(commandText, event.target);
 		}
 	});
@@ -498,9 +465,7 @@ function initEventListeners(
 			console.log(`[PM] ${event.nick}: ${event.message}`);
 			// Handle private message commands
 			if (event.message.startsWith(appConfig.irc.commandPrefix)) {
-				const commandText = event.message.slice(
-					appConfig.irc.commandPrefix.length,
-				);
+				const commandText = event.message.slice(appConfig.irc.commandPrefix.length);
 				handleIrcMessage(commandText, event.nick);
 			}
 		}
@@ -545,9 +510,7 @@ function initEventListeners(
 	// Handle CTCP requests
 	client.on("ctcp request", (event: unknown) => {
 		const ctcpEvent = event as CtcpRequestEvent;
-		console.log(
-			`CTCP ${ctcpEvent.type} request from ${ctcpEvent.nick}: ${ctcpEvent.message}`,
-		);
+		console.log(`CTCP ${ctcpEvent.type} request from ${ctcpEvent.nick}: ${ctcpEvent.message}`);
 	});
 }
 
@@ -560,9 +523,7 @@ function authenticateWithNickServ(nickname: string, password: string): void {
 	const client = getClient();
 
 	// Log authentication attempt (without showing the actual password)
-	console.log(
-		`Attempting to authenticate with NickServ for nickname: ${nickname}`,
-	);
+	console.log(`Attempting to authenticate with NickServ for nickname: ${nickname}`);
 
 	// The correct format is: IDENTIFY <password>
 	// NickServ expects just the password, not the nickname and password
@@ -667,11 +628,7 @@ export async function attemptManualReconnect(): Promise<boolean> {
 		configuredChannels = appConfig.irc.channels || [];
 
 		// Re-initialize event listeners
-		initEventListeners(
-			ircClient,
-			appConfig.irc.nickname,
-			appConfig.irc.nickPassword,
-		);
+		initEventListeners(ircClient, appConfig.irc.nickname, appConfig.irc.nickPassword);
 
 		// Configure SASL authentication if nickPassword is provided
 		const saslAccount =
