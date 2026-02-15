@@ -95,6 +95,7 @@ interface IrcNetwork {
 
 // Default IRC port if not specified
 const DEFAULT_IRC_PORT = 6667;
+const LIBERA_HOST_REGEX = /(^|\.)libera\.chat$/i;
 
 // Global client instance
 let ircClient: Client | null = null;
@@ -110,6 +111,18 @@ let joinOnAuthRegistered = false;
 
 // Store configured channels for reconnect joins.
 let configuredChannels: string[] = [];
+
+function shouldUseBunTlsIpv4Workaround(
+	server: string,
+	secure?: boolean,
+): boolean {
+	// AIDEV-NOTE: Bun TLS + Libera can throw a subject-destructure error unless IPv4 is forced.
+	return (
+		typeof Bun !== "undefined" &&
+		!!secure &&
+		LIBERA_HOST_REGEX.test(server)
+	);
+}
 
 /**
  * Register a callback to be executed after authentication
@@ -221,12 +234,21 @@ export async function initIrcClient(config: {
 	// Create a new client instance
 	ircClient = new IRC.Client();
 	configuredChannels = config.channels || [];
+	const useBunTlsIpv4Workaround = shouldUseBunTlsIpv4Workaround(
+		config.server,
+		config.secure,
+	);
 
 	// Debug logging for configuration
 	console.log("IRC Configuration:");
 	console.log(`  Server: ${config.server}:${config.port}`);
 	console.log(`  Nickname: ${config.nickname}`);
 	console.log(`  TLS Enabled: ${config.secure ? "Yes" : "No"}`);
+	if (useBunTlsIpv4Workaround) {
+		console.warn(
+			"Applying Bun TLS workaround for Libera: forcing IPv4 transport",
+		);
+	}
 
 	// Configure SASL authentication if nickPassword is provided
 	const saslAccount =
@@ -257,6 +279,7 @@ export async function initIrcClient(config: {
 		auto_reconnect_max_retries: 30,
 		auto_reconnect_max_wait: 30000,
 		account: saslAccount,
+		...(useBunTlsIpv4Workaround ? { outgoing_addr: "0.0.0.0" } : {}),
 	});
 
 	initEventListeners(ircClient, config.nickname, config.nickPassword);
