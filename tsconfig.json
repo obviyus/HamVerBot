@@ -26,5 +26,7 @@
 		"noUnusedLocals": false,
 		"noUnusedParameters": false,
 		"noPropertyAccessFromIndexSignature": false
-	}
+	},
+	"include": ["src/**/*.ts", "src/**/*.d.ts"],
+	"exclude": ["hamverbot.ts", "node_modules"]
 }
