@@ -73,11 +73,7 @@ function extractMeetingName(summary: string): string {
 	return cleanSummary;
 }
 
-function createEventSlug(
-	meetingName: string,
-	eventType: EventType,
-	startTime: number,
-): string {
+function createEventSlug(meetingName: string, eventType: EventType, startTime: number): string {
 	const date = new Date(startTime * 1000);
 	const year = date.getFullYear();
 
@@ -112,16 +108,13 @@ function createEventSlug(
 export async function fetchF1Calendar(): Promise<void> {
 	console.log("Fetching F1 calendar...");
 
-	const icsUrl =
-		"https://ics.ecal.com/ecal-sub/660897ca63f9ca0008bcbea6/Formula%201.ics";
+	const icsUrl = "https://ics.ecal.com/ecal-sub/660897ca63f9ca0008bcbea6/Formula%201.ics";
 
 	try {
 		// Using Bun's fetch API
 		const response = await fetch(icsUrl);
 		if (!response.ok) {
-			throw new Error(
-				`Failed to fetch ICS file: ${response.status} ${response.statusText}`,
-			);
+			throw new Error(`Failed to fetch ICS file: ${response.status} ${response.statusText}`);
 		}
 
 		const icsData = await response.text();
@@ -132,9 +125,12 @@ export async function fetchF1Calendar(): Promise<void> {
 		// Process events more efficiently
 		for (const key in parsedData) {
 			const event = parsedData[key];
-			if (event.type !== "VEVENT") continue;
+			if (!event || event.type !== "VEVENT") continue;
 
-			const summary = event.summary as string;
+			if (typeof event.summary !== "string") continue;
+			if (!(event.start instanceof Date)) continue;
+
+			const summary = event.summary;
 			const eventType = determineEventType(summary);
 
 			// Skip events we don't care about
@@ -143,7 +139,7 @@ export async function fetchF1Calendar(): Promise<void> {
 				continue;
 			}
 
-			const startDate = event.start as Date;
+			const startDate = event.start;
 			const meetingName = extractMeetingName(summary);
 			const startTime = Math.floor(startDate.getTime() / 1000);
 
