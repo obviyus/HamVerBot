@@ -1,3 +1,10 @@
+## [1.4.7](https://github.com/obviyus/HamVerBot/compare/v1.4.6...v1.4.7) (2026-02-15)
+
+
+### Bug Fixes
+
+* **irc:** force ipv4 for bun tls libera ([004b433](https://github.com/obviyus/HamVerBot/commit/004b4334aa9520970efc67c72087fc7ec9db73c2))
+
 ## [1.4.6](https://github.com/obviyus/HamVerBot/compare/v1.4.5...v1.4.6) (2026-01-08)
 
 
