@@ -93,6 +93,18 @@ interface IrcNetwork {
 	};
 }
 
+interface IrcClientConfig {
+	server: string;
+	port: number;
+	nickname: string;
+	username?: string;
+	realname?: string;
+	password?: string;
+	nickPassword?: string;
+	secure?: boolean;
+	channels?: string[];
+}
+
 // Default IRC port if not specified
 const DEFAULT_IRC_PORT = 6667;
 const LIBERA_HOST_REGEX = /(^|\.)libera\.chat$/i;
@@ -111,6 +123,23 @@ let joinOnAuthRegistered = false;
 
 // Store configured channels for reconnect joins.
 let configuredChannels: string[] = [];
+
+function hasConfiguredNickPassword(nickPassword?: string): nickPassword is string {
+	return !!nickPassword && nickPassword !== "password";
+}
+
+function getSaslAccount(
+	nickname: string,
+	nickPassword?: string,
+): { account: string; password: string } | undefined {
+	if (!hasConfiguredNickPassword(nickPassword)) return undefined;
+	return { account: nickname, password: nickPassword };
+}
+
+async function resolveJoinChannels(): Promise<string[]> {
+	const dbChannels = await getAllChannels();
+	return configuredChannels.concat(dbChannels);
+}
 
 function shouldUseBunTlsIpv4Workaround(server: string, secure?: boolean): boolean {
 	// AIDEV-NOTE: Bun TLS + Libera can throw a subject-destructure error unless IPv4 is forced.
@@ -134,7 +163,7 @@ export function onAuthenticated(callback: () => void): void {
 /**
  * Ensure we re-join channels after authentication.
  */
-function registerJoinOnAuth(getChannels: () => Promise<string[]>, reason: string): void {
+function registerJoinOnAuth(reason: string): void {
 	if (joinOnAuthRegistered) return;
 	joinOnAuthRegistered = true;
 
@@ -142,7 +171,7 @@ function registerJoinOnAuth(getChannels: () => Promise<string[]>, reason: string
 	onAuthenticated(async () => {
 		joinOnAuthRegistered = false;
 		console.log(`Authentication complete (${reason}), joining channels...`);
-		const channels = await getChannels();
+		const channels = await resolveJoinChannels();
 		joinChannels(channels);
 	});
 }
@@ -151,12 +180,57 @@ function registerJoinOnAuth(getChannels: () => Promise<string[]>, reason: string
  * Execute all registered authentication callbacks
  */
 function executeAuthCallbacks(): void {
-	while (authCallbacks.length > 0) {
-		const callback = authCallbacks.shift();
-		if (callback) {
-			callback();
-		}
+	let callback: (() => void) | undefined;
+	while ((callback = authCallbacks.shift())) callback();
+}
+
+function markAuthenticated(client: Client, logMessage: string): void {
+	isAuthenticated = true;
+	console.log(logMessage);
+	setBotMode(client);
+	executeAuthCallbacks();
+}
+
+function connectClient(client: Client, config: IrcClientConfig): void {
+	const useBunTlsIpv4Workaround = shouldUseBunTlsIpv4Workaround(config.server, config.secure);
+
+	console.log("IRC Configuration:");
+	console.log(`  Server: ${config.server}:${config.port}`);
+	console.log(`  Nickname: ${config.nickname}`);
+	console.log(`  TLS Enabled: ${config.secure ? "Yes" : "No"}`);
+	if (useBunTlsIpv4Workaround) {
+		console.warn("Applying Bun TLS workaround for Libera: forcing IPv4 transport");
 	}
+
+	client.connect({
+		host: config.server,
+		port: config.port || DEFAULT_IRC_PORT,
+		nick: config.nickname,
+		username: config.username || config.nickname,
+		gecos: config.realname || config.nickname,
+		password: config.password,
+		tls: config.secure || false,
+		enable_echomessage: false,
+		ping_interval: 15,
+		ping_timeout: 60,
+		auto_reconnect: true,
+		auto_reconnect_max_retries: 30,
+		auto_reconnect_max_wait: 30000,
+		account: getSaslAccount(config.nickname, config.nickPassword),
+		...(useBunTlsIpv4Workaround ? { outgoing_addr: "0.0.0.0" } : {}),
+	});
+}
+
+function createAndConnectClient(config: IrcClientConfig, joinReason: string): Client {
+	const client = new IRC.Client();
+	ircClient = client;
+	configuredChannels = config.channels || [];
+
+	initEventListeners(client, config.nickname, config.nickPassword);
+	registerJoinOnAuth(joinReason);
+	connectClient(client, config);
+
+	return client;
 }
 
 /**
@@ -187,21 +261,33 @@ export function isClientAuthenticated(): boolean {
 	return isAuthenticated;
 }
 
+function sendWithLogging(target: string, message: string, privateMessage = false): void {
+	const client = getClient();
+	try {
+		client.say(target, message);
+		if (privateMessage) {
+			console.log(`Private message sent to ${target}`);
+		} else {
+			console.log(`Message sent to ${target}: ${message}`);
+		}
+	} catch (error) {
+		if (privateMessage) {
+			console.error(`Error sending private message to ${target}:`, error);
+		} else {
+			console.error(`Error sending message to ${target}:`, error);
+		}
+	}
+}
+
 /**
  * Broadcast a message to all registered channels
  * @param message - The message to broadcast
  */
 export async function broadcast(message: string): Promise<void> {
-	const client = getClient();
 	const channels = await getAllChannels();
 
 	for (const channel of channels) {
-		try {
-			client.say(channel, message);
-			console.log(`Message sent to ${channel}: ${message}`);
-		} catch (error) {
-			console.error(`Error sending message to ${channel}:`, error);
-		}
+		sendWithLogging(channel, message);
 	}
 }
 
@@ -210,66 +296,16 @@ export async function broadcast(message: string): Promise<void> {
  * @param config - The IRC client configuration
  * @returns The initialized IRC client
  */
-export async function initIrcClient(config: {
-	server: string;
-	port: number;
-	nickname: string;
-	username?: string;
-	realname?: string;
-	password?: string;
-	nickPassword?: string;
-	secure?: boolean;
-	channels?: string[];
-}): Promise<Client> {
-	// Create a new client instance
-	ircClient = new IRC.Client();
-	configuredChannels = config.channels || [];
-	const useBunTlsIpv4Workaround = shouldUseBunTlsIpv4Workaround(config.server, config.secure);
+export async function initIrcClient(config: IrcClientConfig): Promise<Client> {
+	return createAndConnectClient(config, "initial connect");
+}
 
-	// Debug logging for configuration
-	console.log("IRC Configuration:");
-	console.log(`  Server: ${config.server}:${config.port}`);
-	console.log(`  Nickname: ${config.nickname}`);
-	console.log(`  TLS Enabled: ${config.secure ? "Yes" : "No"}`);
-	if (useBunTlsIpv4Workaround) {
-		console.warn("Applying Bun TLS workaround for Libera: forcing IPv4 transport");
-	}
-
-	// Configure SASL authentication if nickPassword is provided
-	const saslAccount =
-		config.nickPassword && config.nickPassword !== "password"
-			? { account: config.nickname, password: config.nickPassword }
-			: undefined;
-
-	// Register channel joining as an authentication callback
-	registerJoinOnAuth(async () => {
-		const dbChannels = await getAllChannels();
-		const allChannels = configuredChannels.concat(dbChannels);
-		return allChannels;
-	}, "initial connect");
-
-	// Connect to the IRC server
-	ircClient.connect({
-		host: config.server,
-		port: config.port || DEFAULT_IRC_PORT,
-		nick: config.nickname,
-		username: config.username || config.nickname,
-		gecos: config.realname || config.nickname,
-		password: config.password,
-		tls: config.secure || false,
-		enable_echomessage: false,
-		ping_interval: 15,
-		ping_timeout: 60,
-		auto_reconnect: true,
-		auto_reconnect_max_retries: 30,
-		auto_reconnect_max_wait: 30000,
-		account: saslAccount,
-		...(useBunTlsIpv4Workaround ? { outgoing_addr: "0.0.0.0" } : {}),
+function dispatchCommand(message: string, target: string, commandContext: string): void {
+	if (!message.startsWith(appConfig.irc.commandPrefix)) return;
+	const commandText = message.slice(appConfig.irc.commandPrefix.length);
+	void handleIrcMessage(commandText, target).catch((error) => {
+		console.error(`Error handling ${commandContext} command:`, error);
 	});
-
-	initEventListeners(ircClient, config.nickname, config.nickPassword);
-
-	return ircClient;
 }
 
 /**
@@ -302,38 +338,24 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		console.log("Connected to IRC server...");
 
 		// If SASL is not being used, fall back to NickServ authentication
-		if (nickPassword && nickPassword !== "password") {
+		if (hasConfiguredNickPassword(nickPassword)) {
 			// Check if SASL capability is enabled - if not, use NickServ
 			const clientWithNetwork = client as Client & { network?: IrcNetwork };
 			const caps = clientWithNetwork.network?.cap?.enabled || [];
 			if (!caps.includes("sasl")) {
 				authenticateWithNickServ(nickname, nickPassword);
 			}
-		} else if (!nickPassword || nickPassword === "password") {
-			// If no authentication needed, consider authenticated
-			isAuthenticated = true;
-			console.log("No authentication required, ready to join channels");
-
-			// Set bot mode (+B) after successful registration when no auth needed
-			setBotMode(client);
-
-			// Execute authentication callbacks
-			executeAuthCallbacks();
+			return;
 		}
-		// If SASL is enabled, we'll wait for the 'loggedin' event
+
+		// No authentication configured; treat registration as authenticated.
+		markAuthenticated(client, "No authentication required, ready to join channels");
 	});
 
 	// Handle SASL login events
 	client.on("loggedin", (event: unknown) => {
 		const loggedInEvent = event as LoggedInEvent;
-		console.log(`Successfully authenticated with SASL as ${loggedInEvent.account}`);
-		isAuthenticated = true;
-
-		// Set bot mode (+B) after successful authentication
-		setBotMode(client);
-
-		// Execute authentication callbacks
-		executeAuthCallbacks();
+		markAuthenticated(client, `Successfully authenticated with SASL as ${loggedInEvent.account}`);
 	});
 
 	// Handle SASL failure
@@ -342,7 +364,7 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		console.error(`SASL authentication failed: ${saslFailedEvent.reason}`);
 
 		// Fall back to NickServ if SASL fails and we have a password
-		if (nickPassword && nickPassword !== "password") {
+		if (hasConfiguredNickPassword(nickPassword)) {
 			console.log("Falling back to NickServ authentication");
 			authenticateWithNickServ(nickname, nickPassword);
 		}
@@ -395,11 +417,7 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 	client.on("reconnecting", (opts: unknown) => {
 		const options = opts as { wait: number };
 		console.log(`Reconnecting to IRC server in ${options.wait / 1000} seconds...`);
-		registerJoinOnAuth(async () => {
-			const dbChannels = await getAllChannels();
-			const allChannels = configuredChannels.concat(dbChannels);
-			return allChannels;
-		}, "reconnect");
+		registerJoinOnAuth("reconnect");
 	});
 
 	// Handle successful reconnection
@@ -429,11 +447,7 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 				event.message.includes("You are now identified") ||
 				event.message.includes("You are already logged in")
 			) {
-				isAuthenticated = true;
-				console.log("Successfully authenticated with NickServ");
-
-				// Execute authentication callbacks
-				executeAuthCallbacks();
+				markAuthenticated(client, "Successfully authenticated with NickServ");
 			}
 			// Handle NickServ authentication failures
 			else if (event.message.includes("Invalid password")) {
@@ -453,25 +467,14 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		}
 
 		// Handle commands
-		if (event.message.startsWith(appConfig.irc.commandPrefix)) {
-			const commandText = event.message.slice(appConfig.irc.commandPrefix.length);
-			void handleIrcMessage(commandText, event.target).catch((error) => {
-				console.error("Error handling channel command:", error);
-			});
-		}
+		dispatchCommand(event.message, event.target, "channel");
 	});
 
 	// Handle private messages
 	client.on("privmsg", (event) => {
 		if (event.target === nickname) {
 			console.log(`[PM] ${event.nick}: ${event.message}`);
-			// Handle private message commands
-			if (event.message.startsWith(appConfig.irc.commandPrefix)) {
-				const commandText = event.message.slice(appConfig.irc.commandPrefix.length);
-				void handleIrcMessage(commandText, event.nick).catch((error) => {
-					console.error("Error handling private command:", error);
-				});
-			}
+			dispatchCommand(event.message, event.nick, "private");
 		}
 	});
 
@@ -572,13 +575,7 @@ export function leaveChannel(channel: string): void {
  * @param message - The message to send
  */
 export function sendMessage(channel: string, message: string): void {
-	const client = getClient();
-	try {
-		client.say(channel, message);
-		console.log(`Message sent to ${channel}: ${message}`);
-	} catch (error) {
-		console.error(`Error sending message to ${channel}:`, error);
-	}
+	sendWithLogging(channel, message);
 }
 
 /**
@@ -587,13 +584,7 @@ export function sendMessage(channel: string, message: string): void {
  * @param message - The message to send
  */
 export function sendPrivateMessage(nickname: string, message: string): void {
-	const client = getClient();
-	try {
-		client.say(nickname, message);
-		console.log(`Private message sent to ${nickname}`);
-	} catch (error) {
-		console.error(`Error sending private message to ${nickname}:`, error);
-	}
+	sendWithLogging(nickname, message, true);
 }
 
 /**
@@ -627,46 +618,20 @@ export async function attemptManualReconnect(): Promise<boolean> {
 			return true;
 		}
 
-		// Create a new client instance
-		ircClient = new IRC.Client();
-		configuredChannels = appConfig.irc.channels || [];
-
-		// Re-initialize event listeners
-		initEventListeners(ircClient, appConfig.irc.nickname, appConfig.irc.nickPassword);
-
-		// Configure SASL authentication if nickPassword is provided
-		const saslAccount =
-			appConfig.irc.nickPassword && appConfig.irc.nickPassword !== "password"
-				? {
-						account: appConfig.irc.nickname,
-						password: appConfig.irc.nickPassword,
-					}
-				: undefined;
-
-		// Register channel joining as an authentication callback
-		registerJoinOnAuth(async () => {
-			const dbChannels = await getAllChannels();
-			const allChannels = configuredChannels.concat(dbChannels);
-			return allChannels;
-		}, "manual reconnect");
-
-		// Reconnect with the same configuration
-		ircClient.connect({
-			host: appConfig.irc.server,
-			port: appConfig.irc.port,
-			nick: appConfig.irc.nickname,
-			username: appConfig.irc.nickname,
-			gecos: appConfig.irc.realname,
-			password: appConfig.irc.password,
-			tls: appConfig.irc.useTls,
-			enable_echomessage: false,
-			ping_interval: 15,
-			ping_timeout: 60,
-			auto_reconnect: true,
-			auto_reconnect_max_retries: 30,
-			auto_reconnect_max_wait: 30000,
-			account: saslAccount,
-		});
+		createAndConnectClient(
+			{
+				server: appConfig.irc.server,
+				port: appConfig.irc.port,
+				nickname: appConfig.irc.nickname,
+				username: appConfig.irc.nickname,
+				realname: appConfig.irc.realname,
+				password: appConfig.irc.password,
+				nickPassword: appConfig.irc.nickPassword,
+				secure: appConfig.irc.useTls,
+				channels: appConfig.irc.channels,
+			},
+			"manual reconnect",
+		);
 
 		console.log("Manual reconnection initiated");
 		return true;
