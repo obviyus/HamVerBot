@@ -21,6 +21,14 @@ export enum JobType {
 	CalendarRefresh = "calendar_refresh",
 }
 
+const jobHandlers: Record<JobType, () => Promise<unknown>> = {
+	[JobType.Result]: resultWorker,
+	[JobType.Alert]: alertWorker,
+	[JobType.Wdc]: fetchWdcStandings,
+	[JobType.Wcc]: fetchWccStandings,
+	[JobType.CalendarRefresh]: fetchF1Calendar,
+};
+
 /**
  * Process a job based on its type
  * @param jobType - The type of job to process
@@ -28,23 +36,22 @@ export enum JobType {
  */
 export async function processJob(jobType: JobType) {
 	try {
-		switch (jobType) {
-			case JobType.Result:
-				return await resultWorker();
-			case JobType.Alert:
-				return await alertWorker();
-			case JobType.Wdc:
-				return await fetchWdcStandings();
-			case JobType.Wcc:
-				return await fetchWccStandings();
-			case JobType.CalendarRefresh:
-				return await fetchF1Calendar();
-		}
+		return await jobHandlers[jobType]();
 	} catch (error) {
 		console.error(`Error processing job ${jobType}:`, error);
 		// Don't throw the error further, just log it
 		// This prevents the error from affecting the IRC connection
 	}
+}
+
+function scheduleCron(expression: string, jobType: JobType, jobLabel: string): void {
+	new CronJob(expression, async () => {
+		try {
+			await processJob(jobType);
+		} catch (error) {
+			console.error(`Error in ${jobLabel} job:`, error);
+		}
+	}).start();
 }
 
 /**
@@ -99,53 +106,9 @@ async function alertWorker(): Promise<void> {
  * Schedule jobs to run at specific intervals
  */
 export function scheduleJobs(): void {
-	// Check for new results every 5 minutes
-	new CronJob("*/5 * * * *", async () => {
-		try {
-			await processJob(JobType.Result);
-		} catch (error) {
-			console.error("Error in result job:", error);
-			// Don't let the error propagate and potentially crash the application
-		}
-	}).start();
-
-	// Check for upcoming events every 5 minutes
-	new CronJob("*/5 * * * *", async () => {
-		try {
-			await processJob(JobType.Alert);
-		} catch (error) {
-			console.error("Error in alert job:", error);
-			// Don't let the error propagate and potentially crash the application
-		}
-	}).start();
-
-	// Refresh WDC standings every hour
-	new CronJob("0 * * * *", async () => {
-		try {
-			await processJob(JobType.Wdc);
-		} catch (error) {
-			console.error("Error in WDC standings job:", error);
-			// Don't let the error propagate and potentially crash the application
-		}
-	}).start();
-
-	// Refresh WCC standings every hour
-	new CronJob("0 * * * *", async () => {
-		try {
-			await processJob(JobType.Wcc);
-		} catch (error) {
-			console.error("Error in WCC standings job:", error);
-			// Don't let the error propagate and potentially crash the application
-		}
-	}).start();
-
-	// Refresh calendar once a day
-	new CronJob("0 0 * * *", async () => {
-		try {
-			await processJob(JobType.CalendarRefresh);
-		} catch (error) {
-			console.error("Error in calendar refresh job:", error);
-			// Don't let the error propagate and potentially crash the application
-		}
-	}).start();
+	scheduleCron("*/5 * * * *", JobType.Result, "result");
+	scheduleCron("*/5 * * * *", JobType.Alert, "alert");
+	scheduleCron("0 * * * *", JobType.Wdc, "WDC standings");
+	scheduleCron("0 * * * *", JobType.Wcc, "WCC standings");
+	scheduleCron("0 0 * * *", JobType.CalendarRefresh, "calendar refresh");
 }
