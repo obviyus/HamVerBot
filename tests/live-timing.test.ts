@@ -262,26 +262,26 @@ describe("live timing fetchers", () => {
 	});
 
 	test("fetches current session race control messages", async () => {
-		fetchMock.mockImplementation(async (input) => {
-			const url = requestUrl(input);
-			if (url.endsWith("/SessionInfo.json")) {
-				return jsonResponse({
-					Meeting: { Name: "Australian Grand Prix" },
-					Name: "Race",
-					Path: "2026/aus/race/",
-				});
-			}
+		const startMock = mock(async () => {});
+		const stopMock = mock(async () => {});
+		const invokeMock = mock(async () => ({
+			RaceControlMessages: {
+				Messages: [{ Utc: "1", Category: "Flag", Flag: "RED", Message: "RED FLAG" }],
+			},
+			SessionInfo: {
+				Meeting: { Name: "Australian Grand Prix" },
+				Name: "Race",
+				Path: "2026/aus/race/",
+			},
+		}));
 
-			if (url.endsWith("/RaceControlMessages.json")) {
-				return jsonResponse({
-					Messages: [{ Utc: "1", Category: "Flag", Flag: "RED", Message: "RED FLAG" }],
-				});
-			}
-
-			throw new Error(`Unexpected URL: ${url}`);
-		});
-
-		expect(fetchCurrentSessionRaceControlMessages()).resolves.toEqual({
+		expect(
+			fetchCurrentSessionRaceControlMessages(() => ({
+				start: startMock,
+				stop: stopMock,
+				invoke: invokeMock,
+			})),
+		).resolves.toEqual({
 			session: {
 				Meeting: { Name: "Australian Grand Prix" },
 				Name: "Race",
@@ -289,5 +289,25 @@ describe("live timing fetchers", () => {
 			},
 			messages: [{ Utc: "1", Category: "Flag", Flag: "RED", Message: "RED FLAG" }],
 		});
+		expect(startMock).toHaveBeenCalledTimes(1);
+		expect(invokeMock).toHaveBeenCalledWith("Subscribe", ["RaceControlMessages", "SessionInfo"]);
+		expect(stopMock).toHaveBeenCalledTimes(1);
+	});
+
+	test("stops live timing connection when subscribe fails", async () => {
+		const startMock = mock(async () => {});
+		const stopMock = mock(async () => {});
+		const invokeMock = mock(async () => {
+			throw new Error("boom");
+		});
+
+		expect(
+			fetchCurrentSessionRaceControlMessages(() => ({
+				start: startMock,
+				stop: stopMock,
+				invoke: invokeMock,
+			})),
+		).rejects.toThrow("boom");
+		expect(stopMock).toHaveBeenCalledTimes(1);
 	});
 });

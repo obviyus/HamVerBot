@@ -1,4 +1,7 @@
+import * as signalR from "@microsoft/signalr";
+
 const F1_SESSION_ENDPOINT = "https://livetiming.formula1.com/static";
+const F1_SIGNALR_ENDPOINT = "https://livetiming.formula1.com/signalrcore";
 
 interface CurrentSessionInfo {
 	Meeting: {
@@ -19,6 +22,17 @@ export interface RaceControlMessage {
 
 interface RaceControlMessagesResponse {
 	Messages: RaceControlMessage[];
+}
+
+interface LiveTimingSnapshot {
+	RaceControlMessages?: RaceControlMessagesResponse;
+	SessionInfo?: CurrentSessionInfo;
+}
+
+interface LiveTimingConnection {
+	start(): Promise<void>;
+	stop(): Promise<void>;
+	invoke<T>(methodName: string, ...args: unknown[]): Promise<T>;
 }
 
 interface WeatherData {
@@ -83,6 +97,19 @@ async function fetchCurrentSessionInfo(): Promise<CurrentSessionInfo> {
 	return fetchJson<CurrentSessionInfo>(`${F1_SESSION_ENDPOINT}/SessionInfo.json`);
 }
 
+export function createLiveTimingConnection(): LiveTimingConnection {
+	return (
+		new signalR.HubConnectionBuilder()
+			// AIDEV-NOTE: current-session static JSON is archive-only; live race control has to come from SignalR.
+			.withUrl(F1_SIGNALR_ENDPOINT, {
+				transport: signalR.HttpTransportType.WebSockets,
+				withCredentials: true,
+				timeout: 10000,
+			})
+			.build()
+	);
+}
+
 function formatSessionTitle(session: CurrentSessionInfo): string {
 	return `${session.Meeting.Name}: ${session.Name}`;
 }
@@ -103,11 +130,7 @@ export function shouldAutopostRaceControlMessage(message: RaceControlMessage): b
 		return true;
 	}
 
-	if (
-		message.Category === "SafetyCar" &&
-		message.Status === "DEPLOYED" &&
-		message.Mode !== "VSC"
-	) {
+	if (message.Category === "SafetyCar" && message.Status === "DEPLOYED" && message.Mode !== "VSC") {
 		return true;
 	}
 
@@ -129,35 +152,46 @@ export function formatAutopostRaceControlMessage(
 		return `🚩 \x02${title}\x02: RED FLAG`;
 	}
 
-	if (
-		message.Category === "SafetyCar" &&
-		message.Status === "DEPLOYED" &&
-		message.Mode !== "VSC"
-	) {
+	if (message.Category === "SafetyCar" && message.Status === "DEPLOYED" && message.Mode !== "VSC") {
 		return `🚨 \x02${title}\x02: SAFETY CAR DEPLOYED`;
 	}
 
 	return `⚖️ \x02${title}\x02: ${message.Message}`;
 }
 
-export async function fetchCurrentSessionRaceControlMessages(): Promise<{
+export async function fetchCurrentSessionRaceControlMessages(
+	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
+): Promise<{
 	session: CurrentSessionInfo;
 	messages: RaceControlMessage[];
 }> {
-	const session = await fetchCurrentSessionInfo();
-	const raceControl = await fetchJson<RaceControlMessagesResponse>(
-		`${F1_SESSION_ENDPOINT}/${session.Path}RaceControlMessages.json`,
-	);
+	const connection = createConnection();
 
-	return {
-		session,
-		messages: raceControl.Messages || [],
-	};
+	try {
+		await connection.start();
+		const snapshot = await connection.invoke<LiveTimingSnapshot>("Subscribe", [
+			"RaceControlMessages",
+			"SessionInfo",
+		]);
+
+		if (!snapshot.SessionInfo || !snapshot.RaceControlMessages) {
+			throw new Error("Live timing snapshot missing SessionInfo or RaceControlMessages");
+		}
+
+		return {
+			session: snapshot.SessionInfo,
+			messages: snapshot.RaceControlMessages.Messages || [],
+		};
+	} finally {
+		await connection.stop();
+	}
 }
 
 export async function fetchSessionWeather(): Promise<string> {
 	const session = await fetchCurrentSessionInfo();
-	const weather = await fetchJson<WeatherData>(`${F1_SESSION_ENDPOINT}/${session.Path}WeatherData.json`);
+	const weather = await fetchJson<WeatherData>(
+		`${F1_SESSION_ENDPOINT}/${session.Path}WeatherData.json`,
+	);
 
 	return `🌦️ \x02${formatSessionTitle(session)} Weather\x02: Air ${weather.AirTemp}C | Track ${weather.TrackTemp}C | Humidity ${weather.Humidity}% | Wind ${weather.WindSpeed} @ ${weather.WindDirection}deg | Rain ${weather.Rainfall}`;
 }
@@ -169,7 +203,9 @@ export async function fetchSessionPitStops(): Promise<string> {
 	try {
 		const [pitStops, driverList] = await Promise.all([
 			fetchJson<PitStopSeriesResponse>(`${F1_SESSION_ENDPOINT}/${session.Path}PitStopSeries.json`),
-			fetchJson<Record<string, SessionDriver>>(`${F1_SESSION_ENDPOINT}/${session.Path}DriverList.json`),
+			fetchJson<Record<string, SessionDriver>>(
+				`${F1_SESSION_ENDPOINT}/${session.Path}DriverList.json`,
+			),
 		]);
 
 		const driverMap = new Map(
@@ -180,7 +216,9 @@ export async function fetchSessionPitStops(): Promise<string> {
 			.flat()
 			.map((entry) => entry.PitStop)
 			.filter((stop) => !Number.isNaN(Number.parseFloat(stop.PitStopTime)))
-			.sort((left, right) => Number.parseFloat(left.PitStopTime) - Number.parseFloat(right.PitStopTime))
+			.sort(
+				(left, right) => Number.parseFloat(left.PitStopTime) - Number.parseFloat(right.PitStopTime),
+			)
 			.slice(0, 5);
 
 		if (stops.length === 0) {
@@ -209,7 +247,9 @@ export async function fetchSessionStints(): Promise<string> {
 	const title = formatSessionTitle(session);
 	const [timingAppData, driverList] = await Promise.all([
 		fetchJson<TimingAppDataResponse>(`${F1_SESSION_ENDPOINT}/${session.Path}TimingAppData.json`),
-		fetchJson<Record<string, SessionDriver>>(`${F1_SESSION_ENDPOINT}/${session.Path}DriverList.json`),
+		fetchJson<Record<string, SessionDriver>>(
+			`${F1_SESSION_ENDPOINT}/${session.Path}DriverList.json`,
+		),
 	]);
 
 	const driverMap = new Map(
