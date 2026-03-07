@@ -2,7 +2,8 @@ import type { EventType } from "~/types/event-type";
 import { eventTypeToEmoji, eventTypeToString, stringToEventType } from "~/utils/events";
 import { getLatestPath, getNextEvent } from "./database";
 import { fetchHeadToHead, fetchResults, returnWccStandings, returnWdcStandings } from "./fetch";
-import { getClient } from "./irc";
+import { sendMessage } from "./irc";
+import { fetchSessionPitStops, fetchSessionStints, fetchSessionWeather } from "./live-timing";
 
 /**
  * Parse a timezone argument string (e.g., "utc+1", "gmt-5:30", "+1", "-5:30")
@@ -254,8 +255,35 @@ const commandHandlers: Record<string, (args: string[], target: string) => Promis
 		}
 	},
 
+	weather: async () => {
+		try {
+			return await fetchSessionWeather();
+		} catch (error) {
+			console.error("Error fetching weather:", error);
+			return "Failed to fetch weather.";
+		}
+	},
+
+	pitstops: async () => {
+		try {
+			return await fetchSessionPitStops();
+		} catch (error) {
+			console.error("Error fetching pit stops:", error);
+			return "Failed to fetch pit stops.";
+		}
+	},
+
+	stints: async () => {
+		try {
+			return await fetchSessionStints();
+		} catch (error) {
+			console.error("Error fetching stints:", error);
+			return "Failed to fetch stints.";
+		}
+	},
+
 	help: async () => {
-		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !help";
+		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !weather, !pitstops, !stints, !help";
 	},
 };
 
@@ -287,9 +315,8 @@ export async function handleIrcMessage(message: string, target: string): Promise
 	if (!handler) return;
 
 	try {
-		const client = getClient();
 		const response = await handler(args.slice(1), target);
-		client.say(target, response);
+		sendMessage(target, response);
 	} catch (error) {
 		console.error(`Error handling command ${command}:`, error);
 	}

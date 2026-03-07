@@ -108,6 +108,7 @@ interface IrcClientConfig {
 // Default IRC port if not specified
 const DEFAULT_IRC_PORT = 6667;
 const LIBERA_HOST_REGEX = /(^|\.)libera\.chat$/i;
+const IRC_MAX_LINE_BYTES = 510;
 
 // Global client instance
 let ircClient: Client | null = null;
@@ -263,12 +264,13 @@ export function isClientAuthenticated(): boolean {
 
 function sendWithLogging(target: string, message: string, privateMessage = false): void {
 	const client = getClient();
+	const normalizedMessage = normalizeOutgoingMessage(target, message);
 	try {
-		client.say(target, message);
+		client.say(target, normalizedMessage);
 		if (privateMessage) {
 			console.log(`Private message sent to ${target}`);
 		} else {
-			console.log(`Message sent to ${target}: ${message}`);
+			console.log(`Message sent to ${target}: ${normalizedMessage}`);
 		}
 	} catch (error) {
 		if (privateMessage) {
@@ -277,6 +279,89 @@ function sendWithLogging(target: string, message: string, privateMessage = false
 			console.error(`Error sending message to ${target}:`, error);
 		}
 	}
+}
+
+function normalizeWhitespace(message: string): string {
+	return message.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function getMaxPrivmsgBytes(target: string): number {
+	return IRC_MAX_LINE_BYTES - Buffer.byteLength(`PRIVMSG ${target} :`);
+}
+
+function truncateToBytes(message: string, maxBytes: number): string {
+	if (Buffer.byteLength(message) <= maxBytes) return message;
+
+	const ellipsis = "...";
+	const maxContentBytes = Math.max(0, maxBytes - Buffer.byteLength(ellipsis));
+	const boundaryIndex = findPreferredBoundaryIndex(message, maxContentBytes);
+	if (boundaryIndex > 0) {
+		return `${message.slice(0, boundaryIndex).trimEnd()}${ellipsis}`;
+	}
+
+	let truncated = "";
+	for (const char of message) {
+		if (Buffer.byteLength(truncated) + Buffer.byteLength(char) > maxContentBytes) break;
+		truncated += char;
+	}
+
+	return `${truncated.trimEnd()}${ellipsis}`;
+}
+
+function findPreferredBoundaryIndex(message: string, maxBytes: number): number {
+	const structuredBoundaryIndex = findLastMatchingIndex(message, maxBytes, [
+		...findSeparatorIndexes(message, " | "),
+		...findNumberedItemIndexes(message),
+	]);
+	if (structuredBoundaryIndex > 0) return structuredBoundaryIndex;
+
+	return findLastMatchingIndex(message, maxBytes, findWhitespaceIndexes(message));
+}
+
+function findLastMatchingIndex(message: string, maxBytes: number, indexes: number[]): number {
+	let bestIndex = -1;
+
+	for (const index of indexes) {
+		if (index <= 0) continue;
+		if (Buffer.byteLength(message.slice(0, index).trimEnd()) > maxBytes) continue;
+		if (index > bestIndex) bestIndex = index;
+	}
+
+	return bestIndex;
+}
+
+function findSeparatorIndexes(message: string, separator: string): number[] {
+	const indexes: number[] = [];
+	let searchFrom = 0;
+
+	while (searchFrom < message.length) {
+		const index = message.indexOf(separator, searchFrom);
+		if (index === -1) break;
+		indexes.push(index);
+		searchFrom = index + separator.length;
+	}
+
+	return indexes;
+}
+
+function findNumberedItemIndexes(message: string): number[] {
+	return Array.from(message.matchAll(/ \d+\.\s/g), (match) => match.index ?? -1);
+}
+
+function findWhitespaceIndexes(message: string): number[] {
+	return Array.from(message.matchAll(/ /g), (match) => match.index ?? -1);
+}
+
+function normalizeOutgoingMessage(target: string, message: string): string {
+	const sanitized = normalizeWhitespace(message);
+	const maxBytes = getMaxPrivmsgBytes(target);
+	const normalized = truncateToBytes(sanitized, maxBytes);
+
+	if (normalized !== sanitized) {
+		console.warn(`Truncated outbound IRC message for ${target} to ${maxBytes} bytes`);
+	}
+
+	return normalized;
 }
 
 /**
