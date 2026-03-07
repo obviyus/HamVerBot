@@ -1,3 +1,18 @@
+# [1.5.0](https://github.com/obviyus/HamVerBot/compare/v1.4.8...v1.5.0) (2026-03-07)
+
+
+### Bug Fixes
+
+* **events:** prioritize sprint qualifying aliases ([f43b608](https://github.com/obviyus/HamVerBot/commit/f43b608decd0515101c16ff752e07db491d93472))
+* **standings:** handle empty current-season results ([fe8b751](https://github.com/obviyus/HamVerBot/commit/fe8b751b5f7da0f4ff87e35bd91e5204523530e2))
+
+
+### Features
+
+* **autopost:** add channel race control alerts ([6f9a939](https://github.com/obviyus/HamVerBot/commit/6f9a939f6c803659209c6b19ff83399f9bf4475f))
+* **commands:** add driver head-to-head command ([6379506](https://github.com/obviyus/HamVerBot/commit/63795062559d6782f549d7324be959e3654c268d))
+* **commands:** add live timing commands and safe replies ([92db369](https://github.com/obviyus/HamVerBot/commit/92db369589ab9d35df846b00a557745da450b654))
+
 ## [1.4.8](https://github.com/obviyus/HamVerBot/compare/v1.4.7...v1.4.8) (2026-02-15)
 
 
