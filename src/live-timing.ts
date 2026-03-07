@@ -1,14 +1,18 @@
 import * as signalR from "@microsoft/signalr";
 
-const F1_SESSION_ENDPOINT = "https://livetiming.formula1.com/static";
+const F1_STATIC_ENDPOINT = "https://livetiming.formula1.com/static";
 const F1_SIGNALR_ENDPOINT = "https://livetiming.formula1.com/signalrcore";
 
 interface CurrentSessionInfo {
 	Meeting: {
 		Name: string;
 	};
+	ArchiveStatus: {
+		Status: string;
+	};
 	Name: string;
 	Path: string;
+	SessionStatus?: string;
 }
 
 export interface RaceControlMessage {
@@ -22,11 +26,6 @@ export interface RaceControlMessage {
 
 interface RaceControlMessagesResponse {
 	Messages: RaceControlMessage[];
-}
-
-interface LiveTimingSnapshot {
-	RaceControlMessages?: RaceControlMessagesResponse;
-	SessionInfo?: CurrentSessionInfo;
 }
 
 interface LiveTimingConnection {
@@ -156,27 +155,21 @@ interface TimingAppDataResponse {
 	Lines: Record<string, TimingAppLine>;
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-	const response = await fetch(url, {
-		signal: AbortSignal.timeout(10000),
-	});
-
-	if (!response.ok) {
-		throw new Error(`HTTP error! Status: ${response.status} for URL: ${url}`);
-	}
-
-	const text = (await response.text()).trim().replace(/^\uFEFF/, "");
-	return JSON.parse(text) as T;
+interface LiveTimingSnapshot {
+	RaceControlMessages?: RaceControlMessagesResponse;
+	SessionInfo?: CurrentSessionInfo;
+	WeatherData?: WeatherData;
+	DriverList?: Record<string, SessionDriver>;
+	TimingAppData?: TimingAppDataResponse;
+	PitStopSeries?: PitStopSeriesResponse;
 }
 
-async function fetchCurrentSessionInfo(): Promise<CurrentSessionInfo> {
-	return fetchJson<CurrentSessionInfo>(`${F1_SESSION_ENDPOINT}/SessionInfo.json`);
-}
+type LiveTimingTopic = Exclude<keyof LiveTimingSnapshot, "SessionInfo">;
 
 export function createLiveTimingConnection(): LiveTimingConnection {
 	return (
 		new signalR.HubConnectionBuilder()
-			// AIDEV-NOTE: current-session static JSON is archive-only; live race control has to come from SignalR.
+			// AIDEV-NOTE: live topics come from SignalR while archive generation is in flight; completed sessions fall back to static JSON.
 			.withUrl(F1_SIGNALR_ENDPOINT, {
 				httpClient: new BunSignalRHttpClient(),
 				transport: signalR.HttpTransportType.WebSockets,
@@ -236,104 +229,178 @@ export function formatAutopostRaceControlMessage(
 	return `⚖️ \x02${title}\x02: ${message.Message}`;
 }
 
+async function fetchOptionalJson<T>(url: string): Promise<T | undefined> {
+	const response = await fetch(url, {
+		signal: AbortSignal.timeout(10000),
+	});
+
+	if (response.status === 403) {
+		return undefined;
+	}
+
+	if (!response.ok) {
+		throw new Error(`HTTP error! Status: ${response.status} for URL: ${url}`);
+	}
+
+	const text = (await response.text()).trim().replace(/^\uFEFF/, "");
+	return JSON.parse(text) as T;
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+	const data = await fetchOptionalJson<T>(url);
+	if (data === undefined) {
+		throw new Error(`HTTP error! Status: 403 for URL: ${url}`);
+	}
+
+	return data;
+}
+
+async function fetchCurrentSessionInfo(): Promise<CurrentSessionInfo> {
+	return fetchJson<CurrentSessionInfo>(`${F1_STATIC_ENDPOINT}/SessionInfo.json`);
+}
+
+async function fetchSignalRSnapshot(
+	topics: Array<keyof LiveTimingSnapshot>,
+	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
+): Promise<LiveTimingSnapshot> {
+	const connection = createConnection();
+
+	try {
+		await connection.start();
+		return await connection.invoke<LiveTimingSnapshot>("Subscribe", topics);
+	} finally {
+		await connection.stop();
+	}
+}
+
+async function fetchStaticSnapshot(
+	session: CurrentSessionInfo,
+	topics: LiveTimingTopic[],
+): Promise<LiveTimingSnapshot> {
+	const entries = await Promise.all(
+		topics.map(async (topic) => {
+			const data = await fetchOptionalJson(`${F1_STATIC_ENDPOINT}/${session.Path}${topic}.json`);
+			return [topic, data] as const;
+		}),
+	);
+
+	return Object.fromEntries([
+		["SessionInfo", session],
+		...entries.filter((entry): entry is [LiveTimingTopic, unknown] => entry[1] !== undefined),
+	]) as LiveTimingSnapshot;
+}
+
+async function fetchCurrentSessionSnapshot(
+	topics: LiveTimingTopic[],
+	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
+): Promise<LiveTimingSnapshot> {
+	const session = await fetchCurrentSessionInfo();
+	if (session.ArchiveStatus.Status === "Complete") {
+		return await fetchStaticSnapshot(session, topics);
+	}
+
+	return await fetchSignalRSnapshot(["SessionInfo", ...topics], createConnection);
+}
+
 export async function fetchCurrentSessionRaceControlMessages(
 	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
 ): Promise<{
 	session: CurrentSessionInfo;
 	messages: RaceControlMessage[];
 }> {
-	const connection = createConnection();
-
-	try {
-		await connection.start();
-		const snapshot = await connection.invoke<LiveTimingSnapshot>("Subscribe", [
-			"RaceControlMessages",
-			"SessionInfo",
-		]);
-
-		if (!snapshot.SessionInfo || !snapshot.RaceControlMessages) {
-			throw new Error("Live timing snapshot missing SessionInfo or RaceControlMessages");
-		}
-
-		return {
-			session: snapshot.SessionInfo,
-			messages: snapshot.RaceControlMessages.Messages || [],
-		};
-	} finally {
-		await connection.stop();
+	const snapshot = await fetchCurrentSessionSnapshot(["RaceControlMessages"], createConnection);
+	if (!snapshot.SessionInfo || !snapshot.RaceControlMessages) {
+		throw new Error("Live timing snapshot missing SessionInfo or RaceControlMessages");
 	}
+
+	return {
+		session: snapshot.SessionInfo,
+		messages: snapshot.RaceControlMessages.Messages || [],
+	};
 }
 
-export async function fetchSessionWeather(): Promise<string> {
-	const session = await fetchCurrentSessionInfo();
-	const weather = await fetchJson<WeatherData>(
-		`${F1_SESSION_ENDPOINT}/${session.Path}WeatherData.json`,
-	);
+export async function fetchSessionWeather(
+	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
+): Promise<string> {
+	const snapshot = await fetchCurrentSessionSnapshot(["WeatherData"], createConnection);
+	if (!snapshot.SessionInfo || !snapshot.WeatherData) {
+		throw new Error("Live timing snapshot missing SessionInfo or WeatherData");
+	}
+
+	const session = snapshot.SessionInfo;
+	const weather = snapshot.WeatherData;
 
 	return `🌦️ \x02${formatSessionTitle(session)} Weather\x02: Air ${weather.AirTemp}C | Track ${weather.TrackTemp}C | Humidity ${weather.Humidity}% | Wind ${weather.WindSpeed} @ ${weather.WindDirection}deg | Rain ${weather.Rainfall}`;
 }
 
-export async function fetchSessionPitStops(): Promise<string> {
-	const session = await fetchCurrentSessionInfo();
-	const title = formatSessionTitle(session);
-
-	try {
-		const [pitStops, driverList] = await Promise.all([
-			fetchJson<PitStopSeriesResponse>(`${F1_SESSION_ENDPOINT}/${session.Path}PitStopSeries.json`),
-			fetchJson<Record<string, SessionDriver>>(
-				`${F1_SESSION_ENDPOINT}/${session.Path}DriverList.json`,
-			),
-		]);
-
-		const driverMap = new Map(
-			Object.values(driverList).map((driver) => [driver.RacingNumber, driver.Tla]),
-		);
-
-		const stops = Object.values(pitStops.PitTimes)
-			.flat()
-			.map((entry) => entry.PitStop)
-			.filter((stop) => !Number.isNaN(Number.parseFloat(stop.PitStopTime)))
-			.sort(
-				(left, right) => Number.parseFloat(left.PitStopTime) - Number.parseFloat(right.PitStopTime),
-			)
-			.slice(0, 5);
-
-		if (stops.length === 0) {
-			return `No pit stops recorded for ${title}.`;
-		}
-
-		const summary = stops
-			.map((stop) => {
-				const driver = driverMap.get(stop.RacingNumber) || stop.RacingNumber;
-				return `${driver} ${stop.PitStopTime}s (L${stop.Lap})`;
-			})
-			.join(" | ");
-
-		return `🔧 \x02${title} Pit Stops\x02: ${summary}`;
-	} catch (error) {
-		if (error instanceof Error && error.message.includes("Status: 403")) {
-			return `Pit stop data not available for ${title}.`;
-		}
-
-		throw error;
+export async function fetchSessionPitStops(
+	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
+): Promise<string> {
+	const snapshot = await fetchCurrentSessionSnapshot(
+		["DriverList", "PitStopSeries"],
+		createConnection,
+	);
+	if (!snapshot.SessionInfo) {
+		throw new Error("Live timing snapshot missing SessionInfo");
 	}
-}
 
-export async function fetchSessionStints(): Promise<string> {
-	const session = await fetchCurrentSessionInfo();
+	const session = snapshot.SessionInfo;
 	const title = formatSessionTitle(session);
-	const [timingAppData, driverList] = await Promise.all([
-		fetchJson<TimingAppDataResponse>(`${F1_SESSION_ENDPOINT}/${session.Path}TimingAppData.json`),
-		fetchJson<Record<string, SessionDriver>>(
-			`${F1_SESSION_ENDPOINT}/${session.Path}DriverList.json`,
-		),
-	]);
+
+	if (!snapshot.PitStopSeries) {
+		return `Pit stop data not available for ${title}.`;
+	}
+
+	if (!snapshot.DriverList) {
+		throw new Error("Live timing snapshot missing DriverList");
+	}
 
 	const driverMap = new Map(
-		Object.values(driverList).map((driver) => [driver.RacingNumber, driver.Tla]),
+		Object.values(snapshot.DriverList).map((driver) => [driver.RacingNumber, driver.Tla]),
 	);
 
-	const stints = Object.values(timingAppData.Lines)
+	const stops = Object.values(snapshot.PitStopSeries.PitTimes)
+		.flat()
+		.map((entry) => entry.PitStop)
+		.filter((stop) => !Number.isNaN(Number.parseFloat(stop.PitStopTime)))
+		.sort(
+			(left, right) => Number.parseFloat(left.PitStopTime) - Number.parseFloat(right.PitStopTime),
+		)
+		.slice(0, 5);
+
+	if (stops.length === 0) {
+		return `No pit stops recorded for ${title}.`;
+	}
+
+	const summary = stops
+		.map((stop) => {
+			const driver = driverMap.get(stop.RacingNumber) || stop.RacingNumber;
+			return `${driver} ${stop.PitStopTime}s (L${stop.Lap})`;
+		})
+		.join(" | ");
+
+	return `🔧 \x02${title} Pit Stops\x02: ${summary}`;
+}
+
+export async function fetchSessionStints(
+	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
+): Promise<string> {
+	const snapshot = await fetchCurrentSessionSnapshot(
+		["DriverList", "TimingAppData"],
+		createConnection,
+	);
+	if (!snapshot.SessionInfo || !snapshot.DriverList || !snapshot.TimingAppData) {
+		throw new Error("Live timing snapshot missing SessionInfo, DriverList, or TimingAppData");
+	}
+
+	const session = snapshot.SessionInfo;
+	const title = formatSessionTitle(session);
+
+	const driverMap = new Map(
+		Object.values(snapshot.DriverList).map((driver) => [driver.RacingNumber, driver.Tla]),
+	);
+
+	const stints = Object.values(snapshot.TimingAppData.Lines)
 		.map((line) => {
 			const currentStint = line.Stints.at(-1);
 			if (!currentStint) return null;
