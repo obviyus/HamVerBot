@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/obviyus/HamVerBot/compare/v1.5.0...v1.5.1) (2026-03-07)
+
+
+### Bug Fixes
+
+* **live-timing:** use signalr for live race control ([7b3fdd1](https://github.com/obviyus/HamVerBot/commit/7b3fdd19ed6cb607e61ebec5161e343349304e31))
+
 # [1.5.0](https://github.com/obviyus/HamVerBot/compare/v1.4.8...v1.5.0) (2026-03-07)
 
 
