@@ -1,3 +1,10 @@
+## [1.5.3](https://github.com/obviyus/HamVerBot/compare/v1.5.2...v1.5.3) (2026-03-07)
+
+
+### Bug Fixes
+
+* **live-timing:** unify current session transport ([15aeeb6](https://github.com/obviyus/HamVerBot/commit/15aeeb6f3e2de1981c15daefb22c033a94dd8f22))
+
 ## [1.5.2](https://github.com/obviyus/HamVerBot/compare/v1.5.1...v1.5.2) (2026-03-07)
 
 
