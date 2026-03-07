@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/obviyus/HamVerBot/compare/v1.5.1...v1.5.2) (2026-03-07)
+
+
+### Bug Fixes
+
+* **live-timing:** add bun-safe signalr http client ([f41cd03](https://github.com/obviyus/HamVerBot/commit/f41cd03973d36406f76a0cc25b6869590aaee41d))
+
 ## [1.5.1](https://github.com/obviyus/HamVerBot/compare/v1.5.0...v1.5.1) (2026-03-07)
 
 
