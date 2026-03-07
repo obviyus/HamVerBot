@@ -33,15 +33,6 @@ export enum JobType {
 	Autopost = "autopost",
 }
 
-const jobHandlers: Record<JobType, () => Promise<unknown>> = {
-	[JobType.Result]: resultWorker,
-	[JobType.Alert]: alertWorker,
-	[JobType.Wdc]: fetchWdcStandings,
-	[JobType.Wcc]: fetchWccStandings,
-	[JobType.CalendarRefresh]: fetchF1Calendar,
-	[JobType.Autopost]: autopostWorker,
-};
-
 /**
  * Process a job based on its type
  * @param jobType - The type of job to process
@@ -49,7 +40,20 @@ const jobHandlers: Record<JobType, () => Promise<unknown>> = {
  */
 export async function processJob(jobType: JobType) {
 	try {
-		return await jobHandlers[jobType]();
+		switch (jobType) {
+			case JobType.Result:
+				return await resultWorker();
+			case JobType.Alert:
+				return await alertWorker();
+			case JobType.Wdc:
+				return await fetchWdcStandings();
+			case JobType.Wcc:
+				return await fetchWccStandings();
+			case JobType.CalendarRefresh:
+				return await fetchF1Calendar();
+			case JobType.Autopost:
+				return await autopostWorker();
+		}
 	} catch (error) {
 		console.error(`Error processing job ${jobType}:`, error);
 		// Don't throw the error further, just log it
