@@ -6,11 +6,13 @@
 	"scripts": {
 		"start": "bun run src/index.ts",
 		"build": "bun build src/index.ts --minify --target bun --outfile hamverbot.ts",
+		"test": "bun run scripts/run-tests.ts",
 		"format": "oxfmt --check .",
 		"format:write": "oxfmt --write .",
 		"lint": "oxlint --type-aware .",
 		"lint:fix": "oxlint --type-aware . --fix",
-		"typecheck": "tsgo --noEmit -p tsconfig.json"
+		"typecheck": "tsgo --noEmit -p tsconfig.json",
+		"check": "bun run typecheck && bun run format && bun run lint"
 	},
 	"dependencies": {
 		"@libsql/client": "^0.17.0",
