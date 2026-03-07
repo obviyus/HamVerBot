@@ -449,7 +449,7 @@ async function fetchStandings<T extends object>(
 }
 
 /**
- * Fetch current WCC standings from Ergast API
+ * Fetch current WCC standings from Jolpica API
  */
 export async function fetchWccStandings(): Promise<CurrentConstructorStandings | null> {
 	console.log("Fetching WCC standings...");
@@ -474,7 +474,7 @@ export async function fetchWccStandings(): Promise<CurrentConstructorStandings |
 }
 
 /**
- * Fetch current WDC standings from Ergast API
+ * Fetch current WDC standings from Jolpica API
  */
 export async function fetchWdcStandings(): Promise<CurrentDriverStandings | null> {
 	console.log("Fetching WDC standings...");
@@ -507,6 +507,9 @@ function formatWccStandings(standings: CurrentConstructorStandings): string {
 
 	// Get the first standings list
 	const standingsList = standings.MRData.StandingsTable.StandingsLists[0];
+	if (!standingsList) {
+		return `No constructor standings yet for the ${standings.MRData.StandingsTable.season} season.`;
+	}
 
 	// Take only the top 10 constructors to avoid spamming
 	const topConstructors = standingsList.ConstructorStandings.slice(0, 10);
@@ -527,6 +530,9 @@ function formatWdcStandings(standings: CurrentDriverStandings): string {
 
 	// Get the first standings list
 	const standingsList = standings.MRData.StandingsTable.StandingsLists[0];
+	if (!standingsList) {
+		return `No driver standings yet for the ${standings.MRData.StandingsTable.season} season.`;
+	}
 
 	// Take only the top 10 drivers to avoid spamming
 	const topDrivers = standingsList.DriverStandings.slice(0, 10);
