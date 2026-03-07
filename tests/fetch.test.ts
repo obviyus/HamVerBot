@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
-
-const databaseModulePath = new URL("../src/database.ts", import.meta.url).href;
+import * as database from "../src/database";
 
 const dbExecuteMock = mock(async (_query?: unknown) => ({ rows: [] as Array<Record<string, unknown>> }));
 const getDbMock = mock(async () => ({ execute: dbExecuteMock }));
@@ -9,18 +8,6 @@ const getNextEventMock = mock(async () => null);
 const storeChampionshipStandingsMock = mock(async () => {});
 const storeDriverMock = mock(async () => {});
 const storeEventResultMock = mock(async () => {});
-
-const databaseMocks = {
-	getDb: getDbMock,
-	getEventTypeName: getEventTypeNameMock,
-	getNextEvent: getNextEventMock,
-	storeChampionshipStandings: storeChampionshipStandingsMock,
-	storeDriver: storeDriverMock,
-	storeEventResult: storeEventResultMock,
-};
-
-void mock.module("~/database", () => databaseMocks);
-void mock.module(databaseModulePath, () => databaseMocks);
 
 const fetchModule = await import("../src/fetch.ts");
 
@@ -48,6 +35,7 @@ function requestUrl(input: RequestInfo | URL): string {
 }
 
 beforeEach(() => {
+	mock.restore();
 	dbExecuteMock.mockReset();
 	getDbMock.mockReset();
 	getDbMock.mockResolvedValue({ execute: dbExecuteMock });
@@ -58,10 +46,17 @@ beforeEach(() => {
 	storeEventResultMock.mockReset();
 	fetchMock.mockReset();
 	globalThis.fetch = fetchMock as typeof fetch;
+	spyOn(database, "getDb").mockImplementation(getDbMock);
+	spyOn(database, "getEventTypeName").mockImplementation(getEventTypeNameMock);
+	spyOn(database, "getNextEvent").mockImplementation(getNextEventMock);
+	spyOn(database, "storeChampionshipStandings").mockImplementation(storeChampionshipStandingsMock);
+	spyOn(database, "storeDriver").mockImplementation(storeDriverMock);
+	spyOn(database, "storeEventResult").mockImplementation(storeEventResultMock);
 });
 
 afterEach(() => {
 	globalThis.fetch = originalFetch;
+	mock.restore();
 });
 
 describe("fetchDriverList", () => {

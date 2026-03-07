@@ -1,16 +1,8 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import * as database from "../src/database";
 
 const storeEventsMock = mock(async () => {});
 const parseICSMock = mock(() => ({}));
-const databaseModulePath = new URL("../src/database.ts", import.meta.url).href;
-
-void mock.module("~/database", () => ({
-	storeEvents: storeEventsMock,
-}));
-
-void mock.module(databaseModulePath, () => ({
-	storeEvents: storeEventsMock,
-}));
 
 void mock.module("node-ical", () => ({
 	parseICS: parseICSMock,
@@ -27,10 +19,12 @@ function textResponse(body: string, status = 200): Response {
 beforeEach(() => {
 	storeEventsMock.mockReset();
 	parseICSMock.mockReset();
+	spyOn(database, "storeEvents").mockImplementation(storeEventsMock);
 });
 
 afterEach(() => {
 	globalThis.fetch = originalFetch;
+	mock.restore();
 });
 
 describe("fetchF1Calendar", () => {

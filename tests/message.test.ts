@@ -1,9 +1,8 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
-
-const databaseModulePath = new URL("../src/database.ts", import.meta.url).href;
-const fetchModulePath = new URL("../src/fetch.ts", import.meta.url).href;
-const ircModulePath = new URL("../src/irc.ts", import.meta.url).href;
-const liveTimingModulePath = new URL("../src/live-timing.ts", import.meta.url).href;
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import * as database from "../src/database";
+import * as fetchModule from "../src/fetch";
+import * as irc from "../src/irc";
+import * as liveTiming from "../src/live-timing";
 
 const enableAutopostChannelMock = mock(async () => {});
 const getLatestPathMock = mock(async () => null);
@@ -30,48 +29,10 @@ const shouldAutopostRaceControlMessageMock = mock(
 	(message: { shouldAutopost?: boolean }) => !!message.shouldAutopost,
 );
 
-const databaseMocks = {
-	enableAutopostChannel: enableAutopostChannelMock,
-	getLatestPath: getLatestPathMock,
-	getNextEvent: getNextEventMock,
-	isAutopostChannelEnabled: isAutopostChannelEnabledMock,
-	markAutopostMessagesSeen: markAutopostMessagesSeenMock,
-};
-
-const fetchMocks = {
-	fetchHeadToHead: fetchHeadToHeadMock,
-	fetchResults: fetchResultsMock,
-	returnWccStandings: returnWccStandingsMock,
-	returnWdcStandings: returnWdcStandingsMock,
-};
-
-const liveTimingMocks = {
-	buildRaceControlMessageKey: buildRaceControlMessageKeyMock,
-	fetchCurrentSessionRaceControlMessages: fetchCurrentSessionRaceControlMessagesMock,
-	fetchSessionPitStops: fetchSessionPitStopsMock,
-	fetchSessionStints: fetchSessionStintsMock,
-	fetchSessionWeather: fetchSessionWeatherMock,
-	shouldAutopostRaceControlMessage: shouldAutopostRaceControlMessageMock,
-};
-
-void mock.module("~/config", () => ({
-	config: {
-		irc: {
-			owners: ["obviyus"],
-		},
-	},
-}));
-
-void mock.module(databaseModulePath, () => databaseMocks);
-void mock.module(fetchModulePath, () => fetchMocks);
-void mock.module(ircModulePath, () => ({
-	sendMessage: sendMessageMock,
-}));
-void mock.module(liveTimingModulePath, () => liveTimingMocks);
-
 const { handleIrcMessage } = await import("../src/message.ts");
 
 beforeEach(() => {
+	mock.restore();
 	enableAutopostChannelMock.mockReset();
 	getLatestPathMock.mockReset();
 	getNextEventMock.mockReset();
@@ -100,6 +61,30 @@ beforeEach(() => {
 	shouldAutopostRaceControlMessageMock.mockImplementation(
 		(message: { shouldAutopost?: boolean }) => !!message.shouldAutopost,
 	);
+	spyOn(database, "enableAutopostChannel").mockImplementation(enableAutopostChannelMock);
+	spyOn(database, "getLatestPath").mockImplementation(getLatestPathMock);
+	spyOn(database, "getNextEvent").mockImplementation(getNextEventMock);
+	spyOn(database, "isAutopostChannelEnabled").mockImplementation(isAutopostChannelEnabledMock);
+	spyOn(database, "markAutopostMessagesSeen").mockImplementation(markAutopostMessagesSeenMock);
+	spyOn(fetchModule, "fetchHeadToHead").mockImplementation(fetchHeadToHeadMock);
+	spyOn(fetchModule, "fetchResults").mockImplementation(fetchResultsMock);
+	spyOn(fetchModule, "returnWccStandings").mockImplementation(returnWccStandingsMock);
+	spyOn(fetchModule, "returnWdcStandings").mockImplementation(returnWdcStandingsMock);
+	spyOn(irc, "sendMessage").mockImplementation(sendMessageMock);
+	spyOn(liveTiming, "buildRaceControlMessageKey").mockImplementation(buildRaceControlMessageKeyMock);
+	spyOn(liveTiming, "fetchCurrentSessionRaceControlMessages").mockImplementation(
+		fetchCurrentSessionRaceControlMessagesMock,
+	);
+	spyOn(liveTiming, "fetchSessionPitStops").mockImplementation(fetchSessionPitStopsMock);
+	spyOn(liveTiming, "fetchSessionStints").mockImplementation(fetchSessionStintsMock);
+	spyOn(liveTiming, "fetchSessionWeather").mockImplementation(fetchSessionWeatherMock);
+	spyOn(liveTiming, "shouldAutopostRaceControlMessage").mockImplementation(
+		shouldAutopostRaceControlMessageMock,
+	);
+});
+
+afterEach(() => {
+	mock.restore();
 });
 
 describe("handleIrcMessage", () => {

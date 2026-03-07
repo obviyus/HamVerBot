@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import * as database from "../src/database";
+import * as messageModule from "../src/message";
 
 const getAllChannelsMock = mock(async () => [] as string[]);
 const handleIrcMessageMock = mock(() => Promise.resolve());
@@ -72,30 +74,6 @@ void mock.module("irc-framework", () => ({
 	},
 }));
 
-void mock.module(new URL("../src/database.ts", import.meta.url).href, () => ({
-	getAllChannels: getAllChannelsMock,
-}));
-
-void mock.module(new URL("../src/message.ts", import.meta.url).href, () => ({
-	handleIrcMessage: handleIrcMessageMock,
-}));
-
-void mock.module(new URL("../src/config.ts", import.meta.url).href, () => ({
-	config: {
-		irc: {
-			commandPrefix: "!",
-			server: "irc.libera.chat",
-			port: 6697,
-			nickname: "HamVerBot",
-			nickPassword: "password",
-			password: "serverpass",
-			realname: "Steward",
-			useTls: true,
-			channels: ["#f1"],
-		},
-	},
-}));
-
 const {
 	broadcast,
 	getClient,
@@ -104,11 +82,18 @@ const {
 } = await import("../src/irc.ts");
 
 beforeEach(() => {
+	mock.restore();
 	getAllChannelsMock.mockReset();
 	getAllChannelsMock.mockResolvedValue([]);
 	handleIrcMessageMock.mockReset();
 	handleIrcMessageMock.mockImplementation(() => Promise.resolve());
 	FakeClient.instances.length = 0;
+	spyOn(database, "getAllChannels").mockImplementation(getAllChannelsMock);
+	spyOn(messageModule, "handleIrcMessage").mockImplementation(handleIrcMessageMock);
+});
+
+afterEach(() => {
+	mock.restore();
 });
 
 describe("IRC client", () => {

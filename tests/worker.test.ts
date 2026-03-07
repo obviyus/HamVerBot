@@ -1,4 +1,9 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import * as calendar from "../src/calendar";
+import * as database from "../src/database";
+import * as fetchModule from "../src/fetch";
+import * as irc from "../src/irc";
+import * as liveTiming from "../src/live-timing";
 
 const fetchMocks = {
 	fetchNextEvent: mock(async () => null),
@@ -52,11 +57,6 @@ class FakeCronJob {
 	}
 }
 
-void mock.module("~/fetch", () => fetchMocks);
-void mock.module("~/database", () => databaseMocks);
-void mock.module("~/irc", () => ircMocks);
-void mock.module("~/calendar", () => calendarMocks);
-void mock.module("~/live-timing", () => liveTimingMocks);
 void mock.module("cron", () => ({
 	CronJob: FakeCronJob,
 }));
@@ -64,6 +64,7 @@ void mock.module("cron", () => ({
 const { JobType, processJob, scheduleJobs } = await import("../src/worker.ts");
 
 beforeEach(() => {
+	mock.restore();
 	fetchMocks.fetchNextEvent.mockReset();
 	fetchMocks.fetchResults.mockReset();
 	fetchMocks.fetchWccStandings.mockReset();
@@ -100,6 +101,38 @@ beforeEach(() => {
 	);
 
 	cronJobs.length = 0;
+	spyOn(fetchModule, "fetchNextEvent").mockImplementation(fetchMocks.fetchNextEvent);
+	spyOn(fetchModule, "fetchResults").mockImplementation(fetchMocks.fetchResults);
+	spyOn(fetchModule, "fetchWccStandings").mockImplementation(fetchMocks.fetchWccStandings);
+	spyOn(fetchModule, "fetchWdcStandings").mockImplementation(fetchMocks.fetchWdcStandings);
+	spyOn(fetchModule, "readCurrentEvent").mockImplementation(fetchMocks.readCurrentEvent);
+	spyOn(database, "getAutopostChannels").mockImplementation(databaseMocks.getAutopostChannels);
+	spyOn(database, "getSeenAutopostMessageKeys").mockImplementation(
+		databaseMocks.getSeenAutopostMessageKeys,
+	);
+	spyOn(database, "isEventDelivered").mockImplementation(databaseMocks.isEventDelivered);
+	spyOn(database, "markAutopostMessagesSeen").mockImplementation(
+		databaseMocks.markAutopostMessagesSeen,
+	);
+	spyOn(irc, "broadcast").mockImplementation(ircMocks.broadcast);
+	spyOn(irc, "sendMessage").mockImplementation(ircMocks.sendMessage);
+	spyOn(calendar, "fetchF1Calendar").mockImplementation(calendarMocks.fetchF1Calendar);
+	spyOn(liveTiming, "buildRaceControlMessageKey").mockImplementation(
+		liveTimingMocks.buildRaceControlMessageKey,
+	);
+	spyOn(liveTiming, "fetchCurrentSessionRaceControlMessages").mockImplementation(
+		liveTimingMocks.fetchCurrentSessionRaceControlMessages,
+	);
+	spyOn(liveTiming, "formatAutopostRaceControlMessage").mockImplementation(
+		liveTimingMocks.formatAutopostRaceControlMessage,
+	);
+	spyOn(liveTiming, "shouldAutopostRaceControlMessage").mockImplementation(
+		liveTimingMocks.shouldAutopostRaceControlMessage,
+	);
+});
+
+afterEach(() => {
+	mock.restore();
 });
 
 describe("processJob", () => {

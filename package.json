@@ -6,7 +6,7 @@
 	"scripts": {
 		"start": "bun run src/index.ts",
 		"build": "bun build src/index.ts --minify --target bun --outfile hamverbot.ts",
-		"test": "bun run scripts/run-tests.ts",
+		"test": "bun test",
 		"format": "oxfmt --check .",
 		"format:write": "oxfmt --write .",
 		"lint": "oxlint --type-aware .",
