@@ -141,6 +141,34 @@ interface TimingLine {
 	}>;
 }
 
+interface DriverCodeRef {
+	code?: string;
+}
+
+interface RaceResultEntry {
+	position: string;
+	Driver: DriverCodeRef;
+}
+
+interface QualifyingResultEntry {
+	position: string;
+	Driver: DriverCodeRef;
+}
+
+interface RaceEntry {
+	Results?: RaceResultEntry[];
+	QualifyingResults?: QualifyingResultEntry[];
+}
+
+interface RaceTableResponse<T extends RaceEntry> {
+	MRData: {
+		RaceTable: {
+			season: string;
+			Races: T[];
+		};
+	};
+}
+
 /**
  * Extract driver position and timing data from F1 API response
  */
@@ -530,6 +558,120 @@ export async function returnWdcStandings(): Promise<string | null> {
 		`${ERGAST_API_ENDPOINT}/current/driverstandings/?format=json`,
 		formatWdcStandings,
 	);
+}
+
+function findRaceResult(results: RaceResultEntry[] | undefined, code: string): RaceResultEntry | undefined {
+	return results?.find((result) => result.Driver.code?.toUpperCase() === code);
+}
+
+function findQualifyingResult(
+	results: QualifyingResultEntry[] | undefined,
+	code: string,
+): QualifyingResultEntry | undefined {
+	return results?.find((result) => result.Driver.code?.toUpperCase() === code);
+}
+
+function parsePosition(position: string | undefined): number | null {
+	if (!position) return null;
+	const parsed = Number.parseInt(position, 10);
+	return Number.isNaN(parsed) ? null : parsed;
+}
+
+function formatBestFinish(position: number | null): string {
+	return position ? `P${position}` : "-";
+}
+
+export async function fetchHeadToHead(leftCodeArg: string, rightCodeArg: string): Promise<string> {
+	const leftCode = leftCodeArg.toUpperCase();
+	const rightCode = rightCodeArg.toUpperCase();
+
+	const [standingsResponse, raceResultsResponse, qualifyingResultsResponse] = await Promise.all([
+		fetchJson<CurrentDriverStandings>(
+			`${ERGAST_API_ENDPOINT}/current/driverstandings/?format=json`,
+		),
+		fetchJson<RaceTableResponse<{ Results: RaceResultEntry[] }>>(
+			`${ERGAST_API_ENDPOINT}/current/results/?format=json&limit=1000`,
+		),
+		fetchJson<RaceTableResponse<{ QualifyingResults: QualifyingResultEntry[] }>>(
+			`${ERGAST_API_ENDPOINT}/current/qualifying/?format=json&limit=1000`,
+		),
+	]);
+
+	const standingsTable = standingsResponse.MRData.StandingsTable;
+	const season = standingsTable.season;
+	const driverStandings = standingsTable.StandingsLists[0]?.DriverStandings ?? [];
+	const races = raceResultsResponse.MRData.RaceTable.Races;
+	const qualifyingSessions = qualifyingResultsResponse.MRData.RaceTable.Races;
+	const hasSeasonData =
+		driverStandings.length > 0 || races.length > 0 || qualifyingSessions.length > 0;
+
+	if (!hasSeasonData) {
+		return `No H2H data yet for the ${season} season.`;
+	}
+
+	const leftStanding = driverStandings.find(
+		(standing) => standing.Driver.code?.toUpperCase() === leftCode,
+	);
+	const rightStanding = driverStandings.find(
+		(standing) => standing.Driver.code?.toUpperCase() === rightCode,
+	);
+
+	if (!leftStanding) {
+		return `Unknown driver code: ${leftCode}.`;
+	}
+
+	if (!rightStanding) {
+		return `Unknown driver code: ${rightCode}.`;
+	}
+
+	let leftRaceWins = 0;
+	let rightRaceWins = 0;
+	let leftQualiWins = 0;
+	let rightQualiWins = 0;
+	let leftPodiums = 0;
+	let rightPodiums = 0;
+	let leftBestFinish: number | null = null;
+	let rightBestFinish: number | null = null;
+
+	for (const race of races) {
+		const leftResult = findRaceResult(race.Results, leftCode);
+		const rightResult = findRaceResult(race.Results, rightCode);
+		const leftPosition = parsePosition(leftResult?.position);
+		const rightPosition = parsePosition(rightResult?.position);
+
+		if (leftPosition !== null) {
+			if (leftPosition <= 3) leftPodiums++;
+			if (leftBestFinish === null || leftPosition < leftBestFinish) {
+				leftBestFinish = leftPosition;
+			}
+		}
+
+		if (rightPosition !== null) {
+			if (rightPosition <= 3) rightPodiums++;
+			if (rightBestFinish === null || rightPosition < rightBestFinish) {
+				rightBestFinish = rightPosition;
+			}
+		}
+
+		if (leftPosition !== null && rightPosition !== null) {
+			if (leftPosition < rightPosition) leftRaceWins++;
+			if (rightPosition < leftPosition) rightRaceWins++;
+		}
+	}
+
+	for (const session of qualifyingSessions) {
+		const leftResult = findQualifyingResult(session.QualifyingResults, leftCode);
+		const rightResult = findQualifyingResult(session.QualifyingResults, rightCode);
+		const leftPosition = parsePosition(leftResult?.position);
+		const rightPosition = parsePosition(rightResult?.position);
+
+		if (leftPosition !== null && rightPosition !== null) {
+			if (leftPosition < rightPosition) leftQualiWins++;
+			if (rightPosition < leftPosition) rightQualiWins++;
+		}
+	}
+
+	return `⚔️ \x02H2H ${leftCode} vs ${rightCode}\x02 (${season}): Race \x0303${leftRaceWins}-${rightRaceWins}\x03 | Quali \x0303${leftQualiWins}-${rightQualiWins}\x03 | Points \x0303${leftStanding.points}-${rightStanding.points}\x03 | Podiums \x0303${leftPodiums}-${rightPodiums}\x03 | Best finish \x0303${formatBestFinish(leftBestFinish)}/${formatBestFinish(rightBestFinish)}\x03`;
 }
 
 /**

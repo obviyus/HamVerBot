@@ -1,7 +1,7 @@
 import type { EventType } from "~/types/event-type";
 import { eventTypeToEmoji, eventTypeToString, stringToEventType } from "~/utils/events";
 import { getLatestPath, getNextEvent } from "./database";
-import { fetchResults, returnWccStandings, returnWdcStandings } from "./fetch";
+import { fetchHeadToHead, fetchResults, returnWccStandings, returnWdcStandings } from "./fetch";
 import { getClient } from "./irc";
 
 /**
@@ -232,8 +232,30 @@ const commandHandlers: Record<string, (args: string[], target: string) => Promis
 		}
 	},
 
+	h2h: async (args) => {
+		if (args.length !== 2) {
+			return "Usage: !h2h VER HAM";
+		}
+
+		const [leftCode, rightCode] = args.map((arg) => arg.toUpperCase());
+		if (!/^[A-Z]{3}$/.test(leftCode) || !/^[A-Z]{3}$/.test(rightCode)) {
+			return "Usage: !h2h VER HAM";
+		}
+
+		if (leftCode === rightCode) {
+			return "Pick two different drivers.";
+		}
+
+		try {
+			return await fetchHeadToHead(leftCode, rightCode);
+		} catch (error) {
+			console.error("Error fetching H2H:", error);
+			return "Failed to fetch H2H.";
+		}
+	},
+
 	help: async () => {
-		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !help";
+		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !help";
 	},
 };
 
