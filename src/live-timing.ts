@@ -35,6 +35,82 @@ interface LiveTimingConnection {
 	invoke<T>(methodName: string, ...args: unknown[]): Promise<T>;
 }
 
+class BunSignalRHttpClient extends signalR.HttpClient {
+	private readonly cookies = new Map<string, string>();
+
+	getCookieString(): string {
+		return [...this.cookies.values()].join("; ");
+	}
+
+	private rememberCookies(response: Response): void {
+		const rawCookies = response.headers.get("set-cookie");
+		if (!rawCookies) return;
+
+		for (const match of rawCookies.matchAll(/(?:AWSALB|AWSALBCORS)=[^;]+/g)) {
+			const cookie = match[0];
+			const [name] = cookie.split("=", 1);
+			if (!name) continue;
+			this.cookies.set(name, cookie);
+		}
+	}
+
+	async send(request: signalR.HttpRequest): Promise<signalR.HttpResponse> {
+		if (!request.method) {
+			throw new Error("No method defined.");
+		}
+
+		if (!request.url) {
+			throw new Error("No url defined.");
+		}
+
+		const abortController = new AbortController();
+		if (request.abortSignal?.aborted) {
+			abortController.abort();
+		} else if (request.abortSignal) {
+			request.abortSignal.onabort = () => {
+				abortController.abort();
+			};
+		}
+
+		const signal =
+			request.timeout && typeof AbortSignal.any === "function"
+				? AbortSignal.any([abortController.signal, AbortSignal.timeout(request.timeout)])
+				: request.timeout
+					? AbortSignal.timeout(request.timeout)
+					: abortController.signal;
+
+		const cookieHeader = this.getCookieString();
+		const response = await fetch(request.url, {
+			method: request.method,
+			body: request.content as BodyInit | null | undefined,
+			cache: "no-cache",
+			credentials: request.withCredentials === true ? "include" : "same-origin",
+			headers: {
+				...(cookieHeader ? { Cookie: cookieHeader } : {}),
+				"X-Requested-With": "XMLHttpRequest",
+				...request.headers,
+			},
+			mode: "cors",
+			redirect: "follow",
+			signal,
+		});
+		this.rememberCookies(response);
+
+		const content =
+			request.responseType === "arraybuffer" ? await response.arrayBuffer() : await response.text();
+
+		if (!response.ok) {
+			const errorMessage =
+				typeof content === "string"
+					? content || response.statusText
+					: response.statusText || "SignalR HTTP request failed";
+			throw new signalR.HttpError(errorMessage, response.status);
+		}
+
+		return new signalR.HttpResponse(response.status, response.statusText, content);
+	}
+}
+
 interface WeatherData {
 	AirTemp: string;
 	Humidity: string;
@@ -102,6 +178,7 @@ export function createLiveTimingConnection(): LiveTimingConnection {
 		new signalR.HubConnectionBuilder()
 			// AIDEV-NOTE: current-session static JSON is archive-only; live race control has to come from SignalR.
 			.withUrl(F1_SIGNALR_ENDPOINT, {
+				httpClient: new BunSignalRHttpClient(),
 				transport: signalR.HttpTransportType.WebSockets,
 				withCredentials: true,
 				timeout: 10000,
