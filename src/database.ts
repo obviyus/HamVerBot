@@ -94,6 +94,24 @@ export async function initDatabase(): Promise<ReturnType<typeof createClient>> {
 		`);
 
 		await client.execute(`
+			CREATE TABLE IF NOT EXISTS autopost_channels (
+				id INTEGER PRIMARY KEY,
+				name VARCHAR(255) NOT NULL UNIQUE,
+				create_time INTEGER NOT NULL DEFAULT (unixepoch())
+			)
+		`);
+
+		await client.execute(`
+			CREATE TABLE IF NOT EXISTS autopost_seen_messages (
+				id INTEGER PRIMARY KEY,
+				session_path VARCHAR(255) NOT NULL,
+				message_key VARCHAR(1024) NOT NULL,
+				create_time INTEGER NOT NULL DEFAULT (unixepoch()),
+				UNIQUE(session_path, message_key)
+			)
+		`);
+
+		await client.execute(`
 			CREATE TABLE IF NOT EXISTS driver_list (
 				racing_number INTEGER PRIMARY KEY,
 				reference VARCHAR(255) NOT NULL,
@@ -367,6 +385,54 @@ export async function getAllChannels(): Promise<string[]> {
 	} catch (error) {
 		console.error("Error getting all channels:", error);
 		return [];
+	}
+}
+
+export async function enableAutopostChannel(channelName: string): Promise<void> {
+	const db = await getDb();
+	await db.execute({
+		sql: "INSERT OR IGNORE INTO autopost_channels (name) VALUES (?)",
+		args: [channelName],
+	});
+}
+
+export async function isAutopostChannelEnabled(channelName: string): Promise<boolean> {
+	const db = await getDb();
+	const result = await db.execute({
+		sql: "SELECT 1 FROM autopost_channels WHERE name = ? LIMIT 1",
+		args: [channelName],
+	});
+	return result.rows.length > 0;
+}
+
+export async function getAutopostChannels(): Promise<string[]> {
+	const db = await getDb();
+	const result = await db.execute("SELECT name FROM autopost_channels");
+	return result.rows.map((row) => row.name as string);
+}
+
+export async function getSeenAutopostMessageKeys(sessionPath: string): Promise<Set<string>> {
+	const db = await getDb();
+	const result = await db.execute({
+		sql: "SELECT message_key FROM autopost_seen_messages WHERE session_path = ?",
+		args: [sessionPath],
+	});
+	return new Set(result.rows.map((row) => row.message_key as string));
+}
+
+export async function markAutopostMessagesSeen(
+	sessionPath: string,
+	messageKeys: string[],
+): Promise<void> {
+	if (messageKeys.length === 0) return;
+
+	const db = await getDb();
+	for (const messageKey of messageKeys) {
+		await db.execute({
+			sql: `INSERT OR IGNORE INTO autopost_seen_messages (session_path, message_key)
+				VALUES (?, ?)`,
+			args: [sessionPath, messageKey],
+		});
 	}
 }
 

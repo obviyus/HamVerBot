@@ -1,9 +1,29 @@
+import { config as appConfig } from "~/config";
 import type { EventType } from "~/types/event-type";
 import { eventTypeToEmoji, eventTypeToString, stringToEventType } from "~/utils/events";
-import { getLatestPath, getNextEvent } from "./database";
+import {
+	enableAutopostChannel,
+	getLatestPath,
+	getNextEvent,
+	isAutopostChannelEnabled,
+	markAutopostMessagesSeen,
+} from "./database";
 import { fetchHeadToHead, fetchResults, returnWccStandings, returnWdcStandings } from "./fetch";
 import { sendMessage } from "./irc";
-import { fetchSessionPitStops, fetchSessionStints, fetchSessionWeather } from "./live-timing";
+import {
+	buildRaceControlMessageKey,
+	fetchCurrentSessionRaceControlMessages,
+	fetchSessionPitStops,
+	fetchSessionStints,
+	fetchSessionWeather,
+	shouldAutopostRaceControlMessage,
+} from "./live-timing";
+
+interface CommandContext {
+	target: string;
+	nick: string;
+	isPrivate: boolean;
+}
 
 /**
  * Parse a timezone argument string (e.g., "utc+1", "gmt-5:30", "+1", "-5:30")
@@ -187,7 +207,27 @@ async function getNextEventMessage(eventType?: EventType, timezone?: number): Pr
 }
 
 // Command handler functions
-const commandHandlers: Record<string, (args: string[], target: string) => Promise<string>> = {
+function isOwnerNick(nick: string): boolean {
+	return appConfig.irc.owners.some((owner) => owner.trim().toLowerCase() === nick.toLowerCase());
+}
+
+async function enableAutopost(target: string): Promise<string> {
+	if (await isAutopostChannelEnabled(target)) {
+		return "Autopost already enabled here.";
+	}
+
+	const { session, messages } = await fetchCurrentSessionRaceControlMessages();
+	const relevantMessageKeys = messages
+		.filter(shouldAutopostRaceControlMessage)
+		.map(buildRaceControlMessageKey);
+
+	await markAutopostMessagesSeen(session.Path, relevantMessageKeys);
+	await enableAutopostChannel(target);
+
+	return `Autopost enabled in ${target}. Watching red flags, safety car, penalties.`;
+}
+
+const commandHandlers: Record<string, (args: string[], context: CommandContext) => Promise<string>> = {
 	ping: async () => "pong",
 
 	next: async (args) => {
@@ -282,8 +322,29 @@ const commandHandlers: Record<string, (args: string[], target: string) => Promis
 		}
 	},
 
+	enable: async (args, context) => {
+		if (args[0] !== "autopost") {
+			return "Usage: !enable autopost";
+		}
+
+		if (context.isPrivate) {
+			return "Run this in the channel you want to enable.";
+		}
+
+		if (!isOwnerNick(context.nick)) {
+			return "Only bot owners can enable autopost.";
+		}
+
+		try {
+			return await enableAutopost(context.target);
+		} catch (error) {
+			console.error("Error enabling autopost:", error);
+			return "Failed to enable autopost.";
+		}
+	},
+
 	help: async () => {
-		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !weather, !pitstops, !stints, !help";
+		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !weather, !pitstops, !stints, !enable autopost, !help";
 	},
 };
 
@@ -300,10 +361,10 @@ const commandAliases: Record<string, string> = {
 /**
  * Handle an IRC message
  * @param message - The message text
- * @param target - The target channel or user
+ * @param context - The IRC command context
  */
-export async function handleIrcMessage(message: string, target: string): Promise<void> {
-	console.log(`Processing command: ${message} from ${target}`);
+export async function handleIrcMessage(message: string, context: CommandContext): Promise<void> {
+	console.log(`Processing command: ${message} from ${context.nick} in ${context.target}`);
 
 	const args = message.toLowerCase().split(/\s+/);
 	if (args.length === 0) return;
@@ -315,8 +376,8 @@ export async function handleIrcMessage(message: string, target: string): Promise
 	if (!handler) return;
 
 	try {
-		const response = await handler(args.slice(1), target);
-		sendMessage(target, response);
+		const response = await handler(args.slice(1), context);
+		sendMessage(context.target, response);
 	} catch (error) {
 		console.error(`Error handling command ${command}:`, error);
 	}

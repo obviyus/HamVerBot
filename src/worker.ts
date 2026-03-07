@@ -6,9 +6,20 @@ import {
 	fetchResults,
 	fetchNextEvent,
 } from "~/fetch";
-import { isEventDelivered } from "~/database";
-import { broadcast } from "~/irc";
+import {
+	getAutopostChannels,
+	getSeenAutopostMessageKeys,
+	isEventDelivered,
+	markAutopostMessagesSeen,
+} from "~/database";
+import { broadcast, sendMessage } from "~/irc";
 import { fetchF1Calendar } from "~/calendar";
+import {
+	buildRaceControlMessageKey,
+	fetchCurrentSessionRaceControlMessages,
+	formatAutopostRaceControlMessage,
+	shouldAutopostRaceControlMessage,
+} from "~/live-timing";
 
 /**
  * Enum representing different job types
@@ -19,6 +30,7 @@ export enum JobType {
 	Wcc = "wcc",
 	Wdc = "wdc",
 	CalendarRefresh = "calendar_refresh",
+	Autopost = "autopost",
 }
 
 const jobHandlers: Record<JobType, () => Promise<unknown>> = {
@@ -27,6 +39,7 @@ const jobHandlers: Record<JobType, () => Promise<unknown>> = {
 	[JobType.Wdc]: fetchWdcStandings,
 	[JobType.Wcc]: fetchWccStandings,
 	[JobType.CalendarRefresh]: fetchF1Calendar,
+	[JobType.Autopost]: autopostWorker,
 };
 
 /**
@@ -102,6 +115,38 @@ async function alertWorker(): Promise<void> {
 	}
 }
 
+async function autopostWorker(): Promise<void> {
+	const channels = await getAutopostChannels();
+	if (channels.length === 0) return;
+
+	try {
+		const { session, messages } = await fetchCurrentSessionRaceControlMessages();
+		const relevantMessages = messages.filter(shouldAutopostRaceControlMessage);
+		if (relevantMessages.length === 0) return;
+
+		const seenKeys = await getSeenAutopostMessageKeys(session.Path);
+		const newMessages = relevantMessages.filter((message) => {
+			return !seenKeys.has(buildRaceControlMessageKey(message));
+		});
+
+		if (newMessages.length === 0) return;
+
+		await markAutopostMessagesSeen(
+			session.Path,
+			newMessages.map(buildRaceControlMessageKey),
+		);
+
+		for (const message of newMessages) {
+			const formattedMessage = formatAutopostRaceControlMessage(session, message);
+			for (const channel of channels) {
+				sendMessage(channel, formattedMessage);
+			}
+		}
+	} catch (error) {
+		console.error("Error in autopost worker:", error);
+	}
+}
+
 /**
  * Schedule jobs to run at specific intervals
  */
@@ -111,4 +156,5 @@ export function scheduleJobs(): void {
 	scheduleCron("0 * * * *", JobType.Wdc, "WDC standings");
 	scheduleCron("0 * * * *", JobType.Wcc, "WCC standings");
 	scheduleCron("0 0 * * *", JobType.CalendarRefresh, "calendar refresh");
+	scheduleCron("*/30 * * * * *", JobType.Autopost, "autopost");
 }

@@ -8,6 +8,19 @@ interface CurrentSessionInfo {
 	Path: string;
 }
 
+export interface RaceControlMessage {
+	Utc: string;
+	Category: string;
+	Message: string;
+	Flag?: string;
+	Status?: string;
+	Mode?: string;
+}
+
+interface RaceControlMessagesResponse {
+	Messages: RaceControlMessage[];
+}
+
 interface WeatherData {
 	AirTemp: string;
 	Humidity: string;
@@ -72,6 +85,74 @@ async function fetchCurrentSessionInfo(): Promise<CurrentSessionInfo> {
 
 function formatSessionTitle(session: CurrentSessionInfo): string {
 	return `${session.Meeting.Name}: ${session.Name}`;
+}
+
+export function buildRaceControlMessageKey(message: RaceControlMessage): string {
+	return [
+		message.Utc,
+		message.Category,
+		message.Flag || "",
+		message.Status || "",
+		message.Mode || "",
+		message.Message,
+	].join("|");
+}
+
+export function shouldAutopostRaceControlMessage(message: RaceControlMessage): boolean {
+	if (message.Category === "Flag" && message.Flag === "RED") {
+		return true;
+	}
+
+	if (
+		message.Category === "SafetyCar" &&
+		message.Status === "DEPLOYED" &&
+		message.Mode !== "VSC"
+	) {
+		return true;
+	}
+
+	const normalizedMessage = message.Message.toUpperCase();
+	return (
+		normalizedMessage.includes("PENALTY") &&
+		!normalizedMessage.includes("NO PENALTY") &&
+		!normalizedMessage.includes("PENALTY SERVED")
+	);
+}
+
+export function formatAutopostRaceControlMessage(
+	session: CurrentSessionInfo,
+	message: RaceControlMessage,
+): string {
+	const title = formatSessionTitle(session);
+
+	if (message.Category === "Flag" && message.Flag === "RED") {
+		return `🚩 \x02${title}\x02: RED FLAG`;
+	}
+
+	if (
+		message.Category === "SafetyCar" &&
+		message.Status === "DEPLOYED" &&
+		message.Mode !== "VSC"
+	) {
+		return `🚨 \x02${title}\x02: SAFETY CAR DEPLOYED`;
+	}
+
+	return `⚖️ \x02${title}\x02: ${message.Message}`;
+}
+
+export async function fetchCurrentSessionRaceControlMessages(): Promise<{
+	session: CurrentSessionInfo;
+	messages: RaceControlMessage[];
+}> {
+	const session = await fetchCurrentSessionInfo();
+	const raceControl = await fetchJson<RaceControlMessagesResponse>(
+		`${F1_SESSION_ENDPOINT}/${session.Path}RaceControlMessages.json`,
+	);
+
+	return {
+		session,
+		messages: raceControl.Messages || [],
+	};
 }
 
 export async function fetchSessionWeather(): Promise<string> {
