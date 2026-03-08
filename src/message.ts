@@ -13,7 +13,6 @@ import { sendMessage } from "./irc";
 import {
 	buildRaceControlMessageKey,
 	fetchCurrentSessionRaceControlMessages,
-	fetchSessionPitStops,
 	fetchSessionStints,
 	fetchSessionWeather,
 	shouldAutopostRaceControlMessage,
@@ -227,7 +226,10 @@ async function enableAutopost(target: string): Promise<string> {
 	return `Autopost enabled in ${target}. Watching red flags, safety car, penalties.`;
 }
 
-const commandHandlers: Record<string, (args: string[], context: CommandContext) => Promise<string>> = {
+const commandHandlers: Record<
+	string,
+	(args: string[], context: CommandContext) => Promise<string>
+> = {
 	ping: async () => "pong",
 
 	next: async (args) => {
@@ -304,15 +306,6 @@ const commandHandlers: Record<string, (args: string[], context: CommandContext) 
 		}
 	},
 
-	pitstops: async () => {
-		try {
-			return await fetchSessionPitStops();
-		} catch (error) {
-			console.error("Error fetching pit stops:", error);
-			return "Failed to fetch pit stops.";
-		}
-	},
-
 	stints: async () => {
 		try {
 			return await fetchSessionStints();
@@ -344,7 +337,7 @@ const commandHandlers: Record<string, (args: string[], context: CommandContext) 
 	},
 
 	help: async () => {
-		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !weather, !pitstops, !stints, !enable autopost, !help";
+		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !weather, !stints, !enable autopost, !help";
 	},
 };
 

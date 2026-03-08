@@ -10,7 +10,6 @@ interface CurrentSessionInfo {
 	ArchiveStatus: {
 		Status: string;
 	};
-	Type?: string;
 	Name: string;
 	Path: string;
 	SessionStatus?: string;
@@ -125,33 +124,10 @@ interface SessionDriver {
 	Tla: string;
 }
 
-interface PitStopRecord {
-	RacingNumber: string;
-	PitStopTime: string;
-	Lap: string;
-}
-
-interface PitStopSeriesResponse {
-	PitTimes: Record<
-		string,
-		| Array<{
-				PitStop: PitStopRecord;
-		  }>
-		| Record<
-				string,
-				{
-					PitStop: PitStopRecord;
-				}
-		  >
-	>;
-}
-
 interface TimingStint {
 	Compound: string;
 	New: boolean | string;
 	TotalLaps: number | string;
-	StartLaps?: number | string;
-	TyresNotChanged?: boolean | string;
 }
 
 interface TimingAppLine {
@@ -164,37 +140,12 @@ interface TimingAppDataResponse {
 	Lines: Record<string, TimingAppLine>;
 }
 
-interface PitLaneTimeRecord {
-	Duration?: string;
-	Lap?: string;
-	RacingNumber?: string;
-}
-
-interface PitLaneTimeCollectionResponse {
-	PitTimes: Record<string, PitLaneTimeRecord>;
-}
-
-interface TimingDataLine {
-	RacingNumber: string;
-	Line: number;
-	InPit?: boolean;
-	PitOut?: boolean;
-	NumberOfPitStops?: number | string;
-}
-
-interface TimingDataResponse {
-	Lines: Record<string, TimingDataLine>;
-}
-
 interface LiveTimingSnapshot {
 	RaceControlMessages?: RaceControlMessagesResponse;
 	SessionInfo?: CurrentSessionInfo;
 	WeatherData?: WeatherData;
 	DriverList?: Record<string, SessionDriver>;
 	TimingAppData?: TimingAppDataResponse;
-	TimingDataF1?: TimingDataResponse;
-	PitStopSeries?: PitStopSeriesResponse;
-	PitLaneTimeCollection?: PitLaneTimeCollectionResponse;
 }
 
 type LiveTimingTopic = Exclude<keyof LiveTimingSnapshot, "SessionInfo">;
@@ -336,158 +287,6 @@ async function fetchCurrentSessionSnapshot(
 	return await fetchSignalRSnapshot(["SessionInfo", ...topics], createConnection);
 }
 
-function parseNumber(value: number | string | undefined): number | undefined {
-	if (typeof value === "number") {
-		return Number.isFinite(value) ? value : undefined;
-	}
-
-	if (typeof value !== "string" || value.length === 0) {
-		return undefined;
-	}
-
-	const parsed = Number.parseFloat(value);
-	return Number.isNaN(parsed) ? undefined : parsed;
-}
-
-function isTruthyFlag(value: boolean | string | undefined): boolean {
-	return value === true || value === "true" || value === "1";
-}
-
-function buildDriverMap(driverList: Record<string, SessionDriver>): Map<string, string> {
-	return new Map(Object.values(driverList).map((driver) => [driver.RacingNumber, driver.Tla]));
-}
-
-function formatTimedPitStops(
-	title: string,
-	driverMap: Map<string, string>,
-	stops: PitStopRecord[],
-	label = "Pit Stops",
-): string {
-	const summary = stops
-		.map((stop) => {
-			const driver = driverMap.get(stop.RacingNumber) || stop.RacingNumber;
-			return `${driver} ${stop.PitStopTime}s (L${stop.Lap})`;
-		})
-		.join(" | ");
-
-	return `🔧 \x02${title} ${label}\x02: ${summary}`;
-}
-
-function extractPitStopSeriesStops(series: PitStopSeriesResponse | undefined): PitStopRecord[] {
-	if (!series) {
-		return [];
-	}
-
-	return Object.values(series.PitTimes)
-		.flatMap((bucket) => (Array.isArray(bucket) ? bucket : Object.values(bucket)))
-		.map((entry) => entry.PitStop)
-		.filter((stop) => parseNumber(stop.PitStopTime) !== undefined)
-		.sort(
-			(left, right) =>
-				(parseNumber(left.PitStopTime) ?? Number.POSITIVE_INFINITY) -
-				(parseNumber(right.PitStopTime) ?? Number.POSITIVE_INFINITY),
-		)
-		.slice(0, 5);
-}
-
-function extractPitLaneTimeStops(
-	collection: PitLaneTimeCollectionResponse | undefined,
-): PitStopRecord[] {
-	if (!collection) {
-		return [];
-	}
-
-	return Object.entries(collection.PitTimes)
-		.map(([racingNumber, pitTime]) => ({
-			RacingNumber: pitTime.RacingNumber || racingNumber,
-			PitStopTime: pitTime.Duration || "",
-			Lap: pitTime.Lap || "?",
-		}))
-		.filter((stop) => parseNumber(stop.PitStopTime) !== undefined)
-		.sort(
-			(left, right) =>
-				(parseNumber(left.PitStopTime) ?? Number.POSITIVE_INFINITY) -
-				(parseNumber(right.PitStopTime) ?? Number.POSITIVE_INFINITY),
-		)
-		.slice(0, 5);
-}
-
-function buildLiveRacePitSummary(snapshot: LiveTimingSnapshot, title: string): string | undefined {
-	if (!snapshot.DriverList || !snapshot.TimingAppData || !snapshot.TimingDataF1) {
-		return undefined;
-	}
-
-	const driverMap = buildDriverMap(snapshot.DriverList);
-	const entries = Object.values(snapshot.TimingDataF1.Lines)
-		.map((line) => {
-			const pitStopCount = parseNumber(line.NumberOfPitStops);
-			if (!pitStopCount || pitStopCount < 1) {
-				return null;
-			}
-
-			const stints = snapshot.TimingAppData?.Lines[line.RacingNumber]?.Stints || [];
-			const latestStint = stints.at(-1);
-			const previousStint = stints.at(-2);
-			const completedStops = Math.max(stints.length - 1, 0);
-			const driver = driverMap.get(line.RacingNumber) || line.RacingNumber;
-
-			if (line.InPit || line.PitOut) {
-				return {
-					sortGroup: 0,
-					sortLine: line.Line,
-					sortLap: Number.POSITIVE_INFINITY,
-					text: `${driver} IN PIT (#${pitStopCount})`,
-				};
-			}
-
-			if (completedStops < 1 || !latestStint) {
-				return null;
-			}
-
-			const pitLap = parseNumber(latestStint.StartLaps);
-			const transition =
-				previousStint && latestStint.Compound
-					? ` ${previousStint.Compound.toLowerCase()}>${latestStint.Compound.toLowerCase()}`
-					: latestStint.Compound
-						? ` ${latestStint.Compound.toLowerCase()}`
-						: "";
-			const noChange = isTruthyFlag(latestStint.TyresNotChanged) ? ",nochg" : "";
-
-			return {
-				sortGroup: 1,
-				sortLine: line.Line,
-				sortLap: pitLap ?? -1,
-				text: `${driver} #${completedStops}${pitLap !== undefined ? ` L${pitLap}` : ""}${transition}${noChange}`,
-			};
-		})
-		.filter(
-			(entry): entry is { sortGroup: number; sortLine: number; sortLap: number; text: string } =>
-				entry !== null,
-		)
-		.sort((left, right) => {
-			if (left.sortGroup !== right.sortGroup) {
-				return left.sortGroup - right.sortGroup;
-			}
-
-			if (left.sortGroup === 0) {
-				return left.sortLine - right.sortLine;
-			}
-
-			if (left.sortLap !== right.sortLap) {
-				return right.sortLap - left.sortLap;
-			}
-
-			return left.sortLine - right.sortLine;
-		})
-		.slice(0, 5);
-
-	if (entries.length === 0) {
-		return `No pit stops recorded for ${title}.`;
-	}
-
-	return `🔧 \x02${title} Pit Stops\x02: Live feed hides exact times; ${entries.map((entry) => entry.text).join(" | ")}`;
-}
-
 export async function fetchCurrentSessionRaceControlMessages(
 	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
 ): Promise<{
@@ -517,42 +316,6 @@ export async function fetchSessionWeather(
 	const weather = snapshot.WeatherData;
 
 	return `🌦️ \x02${formatSessionTitle(session)} Weather\x02: Air ${weather.AirTemp}C | Track ${weather.TrackTemp}C | Humidity ${weather.Humidity}% | Wind ${weather.WindSpeed} @ ${weather.WindDirection}deg | Rain ${weather.Rainfall}`;
-}
-
-export async function fetchSessionPitStops(
-	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
-): Promise<string> {
-	const snapshot = await fetchCurrentSessionSnapshot(
-		["DriverList", "PitStopSeries", "PitLaneTimeCollection", "TimingAppData", "TimingDataF1"],
-		createConnection,
-	);
-	if (!snapshot.SessionInfo) {
-		throw new Error("Live timing snapshot missing SessionInfo");
-	}
-
-	const session = snapshot.SessionInfo;
-	const title = formatSessionTitle(session);
-	const driverMap = snapshot.DriverList
-		? buildDriverMap(snapshot.DriverList)
-		: new Map<string, string>();
-	const timedStops = extractPitStopSeriesStops(snapshot.PitStopSeries);
-	if (timedStops.length > 0) {
-		return formatTimedPitStops(title, driverMap, timedStops);
-	}
-
-	const pitLaneTimeStops = extractPitLaneTimeStops(snapshot.PitLaneTimeCollection);
-	if (pitLaneTimeStops.length > 0) {
-		return formatTimedPitStops(title, driverMap, pitLaneTimeStops, "Pit Lane Times");
-	}
-
-	if (session.Type === "Race" || session.Name === "Race") {
-		const liveSummary = buildLiveRacePitSummary(snapshot, title);
-		if (liveSummary) {
-			return liveSummary;
-		}
-	}
-
-	return `Pit stop data not available for ${title}.`;
 }
 
 export async function fetchSessionStints(

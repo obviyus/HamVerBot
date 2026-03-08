@@ -22,7 +22,6 @@ const fetchCurrentSessionRaceControlMessagesMock = mock(async () => ({
 	session: { Path: "2026/race/" },
 	messages: [] as Array<{ id: string; shouldAutopost?: boolean }>,
 }));
-const fetchSessionPitStopsMock = mock(async () => "pit stops");
 const fetchSessionStintsMock = mock(async () => "stints");
 const fetchSessionWeatherMock = mock(async () => "weather");
 const shouldAutopostRaceControlMessageMock = mock(
@@ -54,7 +53,6 @@ beforeEach(() => {
 		session: { Path: "2026/race/" },
 		messages: [],
 	});
-	fetchSessionPitStopsMock.mockReset();
 	fetchSessionStintsMock.mockReset();
 	fetchSessionWeatherMock.mockReset();
 	shouldAutopostRaceControlMessageMock.mockReset();
@@ -71,11 +69,12 @@ beforeEach(() => {
 	spyOn(fetchModule, "returnWccStandings").mockImplementation(returnWccStandingsMock);
 	spyOn(fetchModule, "returnWdcStandings").mockImplementation(returnWdcStandingsMock);
 	spyOn(irc, "sendMessage").mockImplementation(sendMessageMock);
-	spyOn(liveTiming, "buildRaceControlMessageKey").mockImplementation(buildRaceControlMessageKeyMock);
+	spyOn(liveTiming, "buildRaceControlMessageKey").mockImplementation(
+		buildRaceControlMessageKeyMock,
+	);
 	spyOn(liveTiming, "fetchCurrentSessionRaceControlMessages").mockImplementation(
 		fetchCurrentSessionRaceControlMessagesMock,
 	);
-	spyOn(liveTiming, "fetchSessionPitStops").mockImplementation(fetchSessionPitStopsMock);
 	spyOn(liveTiming, "fetchSessionStints").mockImplementation(fetchSessionStintsMock);
 	spyOn(liveTiming, "fetchSessionWeather").mockImplementation(fetchSessionWeatherMock);
 	spyOn(liveTiming, "shouldAutopostRaceControlMessage").mockImplementation(
@@ -164,10 +163,7 @@ describe("handleIrcMessage", () => {
 			isPrivate: false,
 		});
 
-		expect(sendMessageMock).toHaveBeenCalledWith(
-			"#test",
-			"Only bot owners can enable autopost.",
-		);
+		expect(sendMessageMock).toHaveBeenCalledWith("#test", "Only bot owners can enable autopost.");
 	});
 
 	test("short-circuits when autopost is already enabled", async () => {
