@@ -10,3 +10,4 @@
 node_modules/
 .env
 hamverbot.ts
+AGENT_SCRATCHPAD.md
