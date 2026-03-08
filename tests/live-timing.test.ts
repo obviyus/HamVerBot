@@ -243,6 +243,128 @@ describe("live timing fetchers", () => {
 			"SessionInfo",
 			"DriverList",
 			"PitStopSeries",
+			"PitLaneTimeCollection",
+			"TimingAppData",
+			"TimingDataF1",
+		]);
+		expect(stopMock).toHaveBeenCalledTimes(1);
+	});
+
+	test("formats pit lane times from the replacement topic", async () => {
+		mockCurrentSessionFetch(
+			currentSessionInfo({
+				Name: "Race",
+				Path: "2026/aus/race/",
+				Type: "Race",
+			}),
+		);
+
+		const { createConnection, invokeMock, stopMock } = createConnectionMock({
+			SessionInfo: {
+				Meeting: { Name: "Australian Grand Prix" },
+				ArchiveStatus: { Status: "Generating" },
+				Name: "Race",
+				Path: "2026/aus/race/",
+				Type: "Race",
+			},
+			PitLaneTimeCollection: {
+				PitTimes: {
+					"81": { Duration: "22.45", Lap: "15" },
+					"4": { Duration: "24.10", Lap: "18" },
+				},
+			},
+			DriverList: {
+				"81": { RacingNumber: "81", Tla: "PIA" },
+				"4": { RacingNumber: "4", Tla: "NOR" },
+			},
+		});
+
+		expect(fetchSessionPitStops(createConnection)).resolves.toBe(
+			"🔧 \x02Australian Grand Prix: Race Pit Lane Times\x02: PIA 22.45s (L15) | NOR 24.10s (L18)",
+		);
+		expect(invokeMock).toHaveBeenCalledWith("Subscribe", [
+			"SessionInfo",
+			"DriverList",
+			"PitStopSeries",
+			"PitLaneTimeCollection",
+			"TimingAppData",
+			"TimingDataF1",
+		]);
+		expect(stopMock).toHaveBeenCalledTimes(1);
+	});
+
+	test("summarizes live race pit activity when exact pit times are hidden", async () => {
+		mockCurrentSessionFetch(
+			currentSessionInfo({
+				Name: "Race",
+				Path: "2026/aus/race/",
+				Type: "Race",
+			}),
+		);
+
+		const { createConnection, invokeMock, stopMock } = createConnectionMock({
+			SessionInfo: {
+				Meeting: { Name: "Australian Grand Prix" },
+				ArchiveStatus: { Status: "Generating" },
+				Name: "Race",
+				Path: "2026/aus/race/",
+				Type: "Race",
+			},
+			DriverList: {
+				"4": { RacingNumber: "4", Tla: "NOR" },
+				"43": { RacingNumber: "43", Tla: "COL" },
+			},
+			TimingDataF1: {
+				Lines: {
+					"4": {
+						RacingNumber: "4",
+						Line: 2,
+						InPit: true,
+						NumberOfPitStops: 1,
+					},
+					"43": {
+						RacingNumber: "43",
+						Line: 10,
+						InPit: false,
+						NumberOfPitStops: 1,
+					},
+				},
+			},
+			TimingAppData: {
+				Lines: {
+					"4": {
+						RacingNumber: "4",
+						Line: 2,
+						Stints: [{ Compound: "MEDIUM", New: true, TotalLaps: 10 }],
+					},
+					"43": {
+						RacingNumber: "43",
+						Line: 10,
+						Stints: [
+							{ Compound: "HARD", New: true, TotalLaps: 9 },
+							{
+								Compound: "HARD",
+								New: false,
+								StartLaps: 9,
+								TotalLaps: 10,
+								TyresNotChanged: "1",
+							},
+						],
+					},
+				},
+			},
+		});
+
+		expect(fetchSessionPitStops(createConnection)).resolves.toBe(
+			"🔧 \x02Australian Grand Prix: Race Pit Stops\x02: Live feed hides exact times; NOR IN PIT (#1) | COL #1 L9 hard>hard,nochg",
+		);
+		expect(invokeMock).toHaveBeenCalledWith("Subscribe", [
+			"SessionInfo",
+			"DriverList",
+			"PitStopSeries",
+			"PitLaneTimeCollection",
+			"TimingAppData",
+			"TimingDataF1",
 		]);
 		expect(stopMock).toHaveBeenCalledTimes(1);
 	});
@@ -266,6 +388,9 @@ describe("live timing fetchers", () => {
 			"SessionInfo",
 			"DriverList",
 			"PitStopSeries",
+			"PitLaneTimeCollection",
+			"TimingAppData",
+			"TimingDataF1",
 		]);
 		expect(stopMock).toHaveBeenCalledTimes(1);
 	});
@@ -347,6 +472,9 @@ describe("live timing fetchers", () => {
 				"81": { RacingNumber: "81", Tla: "PIA" },
 			}),
 			"2026/aus/fp3/PitStopSeries.json": new Response("forbidden", { status: 403 }),
+			"2026/aus/fp3/PitLaneTimeCollection.json": new Response("forbidden", { status: 403 }),
+			"2026/aus/fp3/TimingAppData.json": new Response("forbidden", { status: 403 }),
+			"2026/aus/fp3/TimingDataF1.json": new Response("forbidden", { status: 403 }),
 		});
 
 		expect(
