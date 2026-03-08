@@ -1,3 +1,10 @@
+## [1.5.4](https://github.com/obviyus/HamVerBot/compare/v1.5.3...v1.5.4) (2026-03-08)
+
+
+### Bug Fixes
+
+* **live-timing:** restore live pitstops ([20a280b](https://github.com/obviyus/HamVerBot/commit/20a280b5eeb02de3eefffdea2ff6d9fda9cce4fb))
+
 ## [1.5.3](https://github.com/obviyus/HamVerBot/compare/v1.5.2...v1.5.3) (2026-03-07)
 
 
