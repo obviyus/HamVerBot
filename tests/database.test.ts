@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const createClientMock = mock((_config: unknown) => ({
 	execute: executeMock,
+	batch: batchMock,
 	close: closeMock,
 }));
-const executeMock = mock(async (_query?: unknown) => ({ rows: [] as Array<Record<string, unknown>> }));
+const executeMock = mock(async (_query?: unknown) => ({
+	rows: [] as Array<Record<string, unknown>>,
+}));
+const batchMock = mock(async (_statements?: unknown, _mode?: unknown) => []);
 const closeMock = mock(() => {});
 
 void mock.module("@libsql/client", () => ({
@@ -15,15 +19,23 @@ async function loadDatabaseModule() {
 	return import(`../src/database.ts?test=${crypto.randomUUID()}`);
 }
 
+function hasSqlQuery(query: unknown): query is { sql: string; args?: unknown[] } {
+	return (
+		typeof query === "object" && query !== null && "sql" in query && typeof query.sql === "string"
+	);
+}
+
 beforeEach(() => {
 	process.env.TURSO_DATABASE_URL = "libsql://hamverbot";
 	process.env.TURSO_AUTH_TOKEN = "secret";
 	createClientMock.mockReset();
 	createClientMock.mockImplementation((_config: unknown) => ({
 		execute: executeMock,
+		batch: batchMock,
 		close: closeMock,
 	}));
 	executeMock.mockReset();
+	batchMock.mockReset();
 	closeMock.mockReset();
 });
 
@@ -49,15 +61,15 @@ describe("database module", () => {
 			.map(([query]) => query)
 			.filter((query): query is string => typeof query === "string");
 
-		expect(sqlCalls.some((sql) => sql.includes("CREATE TABLE IF NOT EXISTS autopost_channels"))).toBe(
-			true,
-		);
+		expect(
+			sqlCalls.some((sql) => sql.includes("CREATE TABLE IF NOT EXISTS autopost_channels")),
+		).toBe(true);
 		expect(
 			sqlCalls.some((sql) => sql.includes("CREATE TABLE IF NOT EXISTS autopost_seen_messages")),
 		).toBe(true);
 
 		const insertCalls = executeMock.mock.calls.filter(([query]) => {
-			return typeof query === "object" && query && "sql" in query && query.sql.includes("INSERT INTO event_type");
+			return hasSqlQuery(query) && query.sql.includes("INSERT INTO event_type");
 		});
 		expect(insertCalls).toHaveLength(8);
 	});
@@ -117,11 +129,7 @@ describe("database module", () => {
 
 		await database.markAutopostMessagesSeen("2026/race/", ["red", "penalty"]);
 
-		const objectCalls = executeMock.mock.calls
-			.map(([query]) => query)
-			.filter((query): query is { sql: string; args?: unknown[] } => {
-				return typeof query === "object" && query !== null && "sql" in query;
-			});
+		const objectCalls = executeMock.mock.calls.map(([query]) => query).filter(hasSqlQuery);
 
 		expect(
 			objectCalls.some((query) => {
@@ -131,8 +139,20 @@ describe("database module", () => {
 				);
 			}),
 		).toBe(true);
-		expect(
-			objectCalls.filter((query) => query.sql.includes("INSERT OR IGNORE INTO autopost_seen_messages")),
-		).toHaveLength(2);
+		expect(batchMock).toHaveBeenCalledWith(
+			[
+				{
+					sql: `INSERT OR IGNORE INTO autopost_seen_messages (session_path, message_key)
+				VALUES (?, ?)`,
+					args: ["2026/race/", "red"],
+				},
+				{
+					sql: `INSERT OR IGNORE INTO autopost_seen_messages (session_path, message_key)
+				VALUES (?, ?)`,
+					args: ["2026/race/", "penalty"],
+				},
+			],
+			"write",
+		);
 	});
 });

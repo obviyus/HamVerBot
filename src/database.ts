@@ -1,5 +1,43 @@
 import { createClient } from "@libsql/client";
 import { EventType } from "~/types/event-type";
+
+const EVENT_TYPE_DEFINITIONS = [
+	{ id: EventType.LiveryReveal, name: "Livery Reveal" },
+	{ id: EventType.FreePractice1, name: "Practice 1" },
+	{ id: EventType.FreePractice2, name: "Practice 2" },
+	{ id: EventType.FreePractice3, name: "Practice 3" },
+	{ id: EventType.Qualifying, name: "Qualifying" },
+	{ id: EventType.Sprint, name: "Sprint" },
+	{ id: EventType.Race, name: "Race" },
+	{ id: EventType.SprintQualifying, name: "Sprint Qualifying" },
+] as const;
+
+const EVENT_TYPE_NAMES: Record<number, string> = Object.fromEntries(
+	EVENT_TYPE_DEFINITIONS.map((eventType) => [eventType.id, eventType.name]),
+);
+
+const UPSERT_EVENT_SQL = `INSERT INTO events (meeting_name, event_type_id, start_time, event_slug)
+	VALUES (?, ?, ?, ?)
+	ON CONFLICT(event_slug) DO UPDATE SET
+		meeting_name = excluded.meeting_name,
+		event_type_id = excluded.event_type_id,
+		start_time = excluded.start_time`;
+
+const UPSERT_DRIVER_SQL = `INSERT INTO driver_list (
+	racing_number, reference, first_name, last_name, full_name,
+	broadcast_name, tla, team_name, team_color
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(racing_number) DO UPDATE SET
+	reference = excluded.reference,
+	first_name = excluded.first_name,
+	last_name = excluded.last_name,
+	full_name = excluded.full_name,
+	broadcast_name = excluded.broadcast_name,
+	tla = excluded.tla,
+	team_name = excluded.team_name,
+	team_color = excluded.team_color`;
+
 export interface Event {
 	meetingName: string;
 	eventTypeId: EventType;
@@ -134,23 +172,32 @@ export async function initDatabase(): Promise<ReturnType<typeof createClient>> {
 			)
 		`);
 
+		await client.execute(`
+			CREATE INDEX IF NOT EXISTS idx_events_start_time
+			ON events (start_time)
+		`);
+
+		await client.execute(`
+			CREATE INDEX IF NOT EXISTS idx_events_event_type_id_start_time
+			ON events (event_type_id, start_time)
+		`);
+
+		await client.execute(`
+			CREATE INDEX IF NOT EXISTS idx_events_meeting_name_event_type_id
+			ON events (meeting_name, event_type_id)
+		`);
+
+		await client.execute(`
+			CREATE INDEX IF NOT EXISTS idx_results_create_time
+			ON results (create_time)
+		`);
+
 		// Check if event types already exist
 		const eventTypeCount = await client.execute("SELECT COUNT(*) as count FROM event_type");
 
 		// Only insert event types if none exist
 		if (eventTypeCount.rows[0].count === 0) {
-			const eventTypes = [
-				{ id: EventType.LiveryReveal, name: "Livery Reveal" },
-				{ id: EventType.FreePractice1, name: "Practice 1" },
-				{ id: EventType.FreePractice2, name: "Practice 2" },
-				{ id: EventType.FreePractice3, name: "Practice 3" },
-				{ id: EventType.Qualifying, name: "Qualifying" },
-				{ id: EventType.Sprint, name: "Sprint" },
-				{ id: EventType.Race, name: "Race" },
-				{ id: EventType.SprintQualifying, name: "Sprint Qualifying" },
-			];
-
-			for (const type of eventTypes) {
+			for (const type of EVENT_TYPE_DEFINITIONS) {
 				await client.execute({
 					sql: "INSERT INTO event_type (id, name) VALUES (?, ?)",
 					args: [type.id, type.name],
@@ -186,18 +233,13 @@ export async function storeEvents(events: Event[]): Promise<void> {
 
 	try {
 		const db = await getDb();
-
-		for (const event of events) {
-			await db.execute({
-				sql: `INSERT INTO events (meeting_name, event_type_id, start_time, event_slug)
-					VALUES (?, ?, ?, ?)
-					ON CONFLICT(event_slug) DO UPDATE SET
-						meeting_name = excluded.meeting_name,
-						event_type_id = excluded.event_type_id,
-						start_time = excluded.start_time`,
+		await db.batch(
+			events.map((event) => ({
+				sql: UPSERT_EVENT_SQL,
 				args: [event.meetingName, event.eventTypeId, event.startTime, event.eventSlug],
-			});
-		}
+			})),
+			"write",
+		);
 
 		console.log(`Stored ${events.length} events in the database`);
 	} catch (error) {
@@ -207,37 +249,33 @@ export async function storeEvents(events: Event[]): Promise<void> {
 
 // Store driver in the database
 export async function storeDriver(driver: Driver): Promise<void> {
+	await storeDrivers([driver]);
+}
+
+export async function storeDrivers(drivers: Driver[]): Promise<void> {
+	if (drivers.length === 0) return;
+
 	try {
 		const db = await getDb();
-		await db.execute({
-			sql: `INSERT INTO driver_list (
-				racing_number, reference, first_name, last_name, full_name, 
-				broadcast_name, tla, team_name, team_color
-			) 
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(racing_number) DO UPDATE SET
-				reference = excluded.reference,
-				first_name = excluded.first_name,
-				last_name = excluded.last_name,
-				full_name = excluded.full_name,
-				broadcast_name = excluded.broadcast_name,
-				tla = excluded.tla,
-				team_name = excluded.team_name,
-				team_color = excluded.team_color`,
-			args: [
-				driver.racingNumber,
-				driver.reference,
-				driver.firstName,
-				driver.lastName,
-				driver.fullName,
-				driver.broadcastName,
-				driver.tla,
-				driver.teamName,
-				driver.teamColor,
-			],
-		});
+		await db.batch(
+			drivers.map((driver) => ({
+				sql: UPSERT_DRIVER_SQL,
+				args: [
+					driver.racingNumber,
+					driver.reference,
+					driver.firstName,
+					driver.lastName,
+					driver.fullName,
+					driver.broadcastName,
+					driver.tla,
+					driver.teamName,
+					driver.teamColor,
+				],
+			})),
+			"write",
+		);
 	} catch (error) {
-		console.error("Error storing driver:", error);
+		console.error("Error storing drivers:", error);
 	}
 }
 
@@ -427,13 +465,14 @@ export async function markAutopostMessagesSeen(
 	if (messageKeys.length === 0) return;
 
 	const db = await getDb();
-	for (const messageKey of messageKeys) {
-		await db.execute({
+	await db.batch(
+		messageKeys.map((messageKey) => ({
 			sql: `INSERT OR IGNORE INTO autopost_seen_messages (session_path, message_key)
 				VALUES (?, ?)`,
 			args: [sessionPath, messageKey],
-		});
-	}
+		})),
+		"write",
+	);
 }
 
 export async function storeEventResult(eventId: number, path: string, data: object): Promise<void> {
@@ -476,18 +515,7 @@ export async function getEventBySlug(slug: string): Promise<DbEvent | null> {
 
 // Get event type name
 export async function getEventTypeName(eventTypeId: EventType): Promise<string> {
-	try {
-		const db = await getDb();
-		const result = await db.execute({
-			sql: "SELECT name FROM event_type WHERE id = ?",
-			args: [eventTypeId],
-		});
-
-		return result.rows.length > 0 ? (result.rows[0].name as string) : "Unknown";
-	} catch (error) {
-		console.error("Error getting event type name:", error);
-		return "Unknown";
-	}
+	return EVENT_TYPE_NAMES[eventTypeId] ?? "Unknown";
 }
 
 export async function storeChampionshipStandings(type: number, data: object): Promise<void> {

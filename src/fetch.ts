@@ -3,7 +3,7 @@ import {
 	getEventTypeName,
 	getNextEvent,
 	storeChampionshipStandings,
-	storeDriver,
+	storeDrivers,
 	storeEventResult,
 } from "~/database";
 import type {
@@ -88,18 +88,8 @@ export async function fetchDriverList(path: string): Promise<void> {
 			teamColor: driverData.TeamColour || "#FFFFFF",
 		}));
 
-		// Store drivers in database
-		let driversProcessed = 0;
-		for (const driver of drivers) {
-			try {
-				await storeDriver(driver);
-				driversProcessed++;
-			} catch (error) {
-				console.error(`Error storing driver ${driver.fullName}:`, error);
-			}
-		}
-
-		console.log(`Successfully processed ${driversProcessed} drivers`);
+		await storeDrivers(drivers);
+		console.log(`Successfully processed ${drivers.length} drivers`);
 	} catch (error) {
 		console.error("Error fetching or processing driver list:", error);
 	}
@@ -566,7 +556,10 @@ export async function returnWdcStandings(): Promise<string | null> {
 	);
 }
 
-function findRaceResult(results: RaceResultEntry[] | undefined, code: string): RaceResultEntry | undefined {
+function findRaceResult(
+	results: RaceResultEntry[] | undefined,
+	code: string,
+): RaceResultEntry | undefined {
 	return results?.find((result) => result.Driver.code?.toUpperCase() === code);
 }
 

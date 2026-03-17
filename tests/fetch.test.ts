@@ -1,13 +1,22 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import * as database from "../src/database";
 
-const dbExecuteMock = mock(async (_query?: unknown) => ({ rows: [] as Array<Record<string, unknown>> }));
-const getDbMock = mock(async () => ({ execute: dbExecuteMock }));
-const getEventTypeNameMock = mock(async () => "Unknown");
-const getNextEventMock = mock(async () => null);
-const storeChampionshipStandingsMock = mock(async () => {});
-const storeDriverMock = mock(async () => {});
-const storeEventResultMock = mock(async () => {});
+type DbClient = Awaited<ReturnType<typeof database.getDb>>;
+
+const dbExecuteMock = mock(async (_query?: unknown) => ({
+	rows: [] as Array<Record<string, unknown>>,
+}));
+const dbClientMock = {
+	execute: dbExecuteMock,
+} as unknown as DbClient;
+const getDbMock = mock<typeof database.getDb>(async () => dbClientMock);
+const getEventTypeNameMock = mock<typeof database.getEventTypeName>(async () => "Unknown");
+const getNextEventMock = mock<typeof database.getNextEvent>(async () => null);
+const storeChampionshipStandingsMock = mock<typeof database.storeChampionshipStandings>(
+	async () => {},
+);
+const storeDriversMock = mock<typeof database.storeDrivers>(async () => {});
+const storeEventResultMock = mock<typeof database.storeEventResult>(async () => {});
 
 const fetchModule = await import("../src/fetch.ts");
 
@@ -38,19 +47,19 @@ beforeEach(() => {
 	mock.restore();
 	dbExecuteMock.mockReset();
 	getDbMock.mockReset();
-	getDbMock.mockResolvedValue({ execute: dbExecuteMock });
+	getDbMock.mockResolvedValue(dbClientMock);
 	getEventTypeNameMock.mockReset();
 	getNextEventMock.mockReset();
 	storeChampionshipStandingsMock.mockReset();
-	storeDriverMock.mockReset();
+	storeDriversMock.mockReset();
 	storeEventResultMock.mockReset();
 	fetchMock.mockReset();
-	globalThis.fetch = fetchMock as typeof fetch;
+	globalThis.fetch = fetchMock as unknown as typeof fetch;
 	spyOn(database, "getDb").mockImplementation(getDbMock);
 	spyOn(database, "getEventTypeName").mockImplementation(getEventTypeNameMock);
 	spyOn(database, "getNextEvent").mockImplementation(getNextEventMock);
 	spyOn(database, "storeChampionshipStandings").mockImplementation(storeChampionshipStandingsMock);
-	spyOn(database, "storeDriver").mockImplementation(storeDriverMock);
+	spyOn(database, "storeDrivers").mockImplementation(storeDriversMock);
 	spyOn(database, "storeEventResult").mockImplementation(storeEventResultMock);
 });
 
@@ -89,29 +98,30 @@ describe("fetchDriverList", () => {
 
 		await fetchDriverList("2026/aus/fp3/");
 
-		expect(storeDriverMock).toHaveBeenCalledTimes(2);
-		expect(storeDriverMock).toHaveBeenNthCalledWith(1, {
-			racingNumber: 4,
-			reference: "",
-			firstName: "Lando",
-			lastName: "Norris",
-			fullName: "Lando Norris",
-			broadcastName: "L. NORRIS",
-			tla: "NOR",
-			teamName: "McLaren",
-			teamColor: "#FFFFFF",
-		});
-		expect(storeDriverMock).toHaveBeenNthCalledWith(2, {
-			racingNumber: 81,
-			reference: "oscar_piastri",
-			firstName: "Oscar",
-			lastName: "Piastri",
-			fullName: "Oscar Piastri",
-			broadcastName: "O. PIASTRI",
-			tla: "PIA",
-			teamName: "McLaren",
-			teamColor: "FF8000",
-		});
+		expect(storeDriversMock).toHaveBeenCalledWith([
+			{
+				racingNumber: 4,
+				reference: "",
+				firstName: "Lando",
+				lastName: "Norris",
+				fullName: "Lando Norris",
+				broadcastName: "L. NORRIS",
+				tla: "NOR",
+				teamName: "McLaren",
+				teamColor: "#FFFFFF",
+			},
+			{
+				racingNumber: 81,
+				reference: "oscar_piastri",
+				firstName: "Oscar",
+				lastName: "Piastri",
+				fullName: "Oscar Piastri",
+				broadcastName: "O. PIASTRI",
+				tla: "PIA",
+				teamName: "McLaren",
+				teamColor: "FF8000",
+			},
+		]);
 	});
 });
 
@@ -158,7 +168,7 @@ describe("fetchResults", () => {
 	});
 
 	test("fetches fresh results, maps drivers, and stores the session", async () => {
-		dbExecuteMock.mockImplementation(async (query) => {
+		dbExecuteMock.mockImplementation(async (query: unknown) => {
 			if (typeof query === "string" && query.includes("SELECT racing_number, tla, team_name")) {
 				return {
 					rows: [
@@ -183,7 +193,7 @@ describe("fetchResults", () => {
 			return { rows: [] };
 		});
 
-		fetchMock.mockImplementation(async (input) => {
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
 			const url = requestUrl(input);
 			if (url.endsWith("/TimingDataF1.json")) {
 				return jsonResponse({
@@ -217,10 +227,11 @@ describe("fetchResults", () => {
 
 		getEventTypeNameMock.mockResolvedValue("Practice 2");
 
-		expect(fetchResults("2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Practice_2/")).resolves
-			.toBe(
-				"🏎️ \x02Australian Grand Prix: Practice 2 Results\x02: 1. VER - \x0303[1:15.111]\x03 2. PIA - \x0303[1:15.222]\x03",
-			);
+		expect(
+			fetchResults("2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Practice_2/"),
+		).resolves.toBe(
+			"🏎️ \x02Australian Grand Prix: Practice 2 Results\x02: 1. VER - \x0303[1:15.111]\x03 2. PIA - \x0303[1:15.222]\x03",
+		);
 
 		expect(storeEventResultMock).toHaveBeenCalledWith(
 			42,
@@ -262,9 +273,7 @@ describe("standings", () => {
 			}),
 		);
 
-		expect(returnWdcStandings()).resolves.toBe(
-			"No driver standings yet for the 2026 season.",
-		);
+		expect(returnWdcStandings()).resolves.toBe("No driver standings yet for the 2026 season.");
 		expect(storeChampionshipStandingsMock).toHaveBeenCalledWith(0, {
 			MRData: {
 				StandingsTable: {
@@ -308,7 +317,7 @@ describe("standings", () => {
 
 describe("fetchHeadToHead", () => {
 	test("computes a season summary", async () => {
-		fetchMock.mockImplementation(async (input) => {
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
 			const url = requestUrl(input);
 			if (url.includes("/current/driverstandings/")) {
 				return jsonResponse({
@@ -383,7 +392,7 @@ describe("fetchHeadToHead", () => {
 	});
 
 	test("returns a clean error for unknown driver codes", async () => {
-		fetchMock.mockImplementation(async (input) => {
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
 			const url = requestUrl(input);
 			if (url.includes("/current/driverstandings/")) {
 				return jsonResponse({
@@ -422,7 +431,7 @@ describe("fetchNextEvent", () => {
 		getNextEventMock.mockResolvedValue({
 			meetingName: "Australian Grand Prix",
 			eventType: 5,
-			startTime: Math.floor((Date.UTC(2026, 2, 7, 0, 5, 0)) / 1000),
+			startTime: Math.floor(Date.UTC(2026, 2, 7, 0, 5, 0) / 1000),
 		});
 
 		expect(fetchNextEvent()).resolves.toBe(
@@ -437,7 +446,7 @@ describe("fetchNextEvent", () => {
 		getNextEventMock.mockResolvedValue({
 			meetingName: "Australian Grand Prix",
 			eventType: 7,
-			startTime: Math.floor((Date.UTC(2026, 2, 7, 0, 20, 0)) / 1000),
+			startTime: Math.floor(Date.UTC(2026, 2, 7, 0, 20, 0) / 1000),
 		});
 
 		expect(fetchNextEvent()).resolves.toBeNull();
