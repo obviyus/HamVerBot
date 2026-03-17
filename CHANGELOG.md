@@ -1,3 +1,10 @@
+## [1.5.5](https://github.com/obviyus/HamVerBot/compare/v1.5.4...v1.5.5) (2026-03-17)
+
+
+### Performance Improvements
+
+* **db:** reduce turso round-trips ([69c119c](https://github.com/obviyus/HamVerBot/commit/69c119c223e5aab1a1c156f475c19b8d73954c59))
+
 ## [1.5.4](https://github.com/obviyus/HamVerBot/compare/v1.5.3...v1.5.4) (2026-03-08)
 
 
