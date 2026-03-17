@@ -6,6 +6,7 @@
 	"scripts": {
 		"start": "bun run src/index.ts",
 		"build": "bun build src/index.ts --minify --target bun --outfile hamverbot.ts",
+		"schema:sync": "bun run scripts/sync-turso-schema.ts",
 		"test": "bun test",
 		"format": "oxfmt --check .",
 		"format:write": "oxfmt --write .",
