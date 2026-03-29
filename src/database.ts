@@ -233,11 +233,21 @@ export async function storeEvents(events: Event[]): Promise<void> {
 
 	try {
 		const db = await getDb();
+		const eventSlugs = events.map((event) => event.eventSlug);
+		const staleUpcomingEventsSql = `DELETE FROM events
+			WHERE start_time > unixepoch()
+			AND event_slug NOT IN (${eventSlugs.map(() => "?").join(", ")})`;
 		await db.batch(
-			events.map((event) => ({
-				sql: UPSERT_EVENT_SQL,
-				args: [event.meetingName, event.eventTypeId, event.startTime, event.eventSlug],
-			})),
+			[
+				{
+					sql: staleUpcomingEventsSql,
+					args: eventSlugs,
+				},
+				...events.map((event) => ({
+					sql: UPSERT_EVENT_SQL,
+					args: [event.meetingName, event.eventTypeId, event.startTime, event.eventSlug],
+				})),
+			],
 			"write",
 		);
 

@@ -155,4 +155,60 @@ describe("database module", () => {
 			"write",
 		);
 	});
+
+	test("syncs future calendar rows to the latest feed", async () => {
+		executeMock.mockImplementation(async (query) => {
+			if (typeof query === "string" && query.includes("SELECT COUNT(*) as count FROM event_type")) {
+				return { rows: [{ count: 1 }] };
+			}
+
+			return { rows: [] };
+		});
+
+		const database = await loadDatabaseModule();
+		await database.storeEvents([
+			{
+				meetingName: "FORMULA 1 AUSTRALIAN GRAND PRIX 2026",
+				eventTypeId: 2,
+				startTime: 1772802000,
+				eventSlug: "2026-australian-gp-fp1",
+			},
+			{
+				meetingName: "FORMULA 1 AUSTRALIAN GRAND PRIX 2026",
+				eventTypeId: 7,
+				startTime: 1772974800,
+				eventSlug: "2026-australian-gp-race",
+			},
+		]);
+
+		expect(batchMock).toHaveBeenCalledWith(
+			[
+				{
+					sql: `DELETE FROM events
+			WHERE start_time > unixepoch()
+			AND event_slug NOT IN (?, ?)`,
+					args: ["2026-australian-gp-fp1", "2026-australian-gp-race"],
+				},
+				{
+					sql: `INSERT INTO events (meeting_name, event_type_id, start_time, event_slug)
+	VALUES (?, ?, ?, ?)
+	ON CONFLICT(event_slug) DO UPDATE SET
+		meeting_name = excluded.meeting_name,
+		event_type_id = excluded.event_type_id,
+		start_time = excluded.start_time`,
+					args: ["FORMULA 1 AUSTRALIAN GRAND PRIX 2026", 2, 1772802000, "2026-australian-gp-fp1"],
+				},
+				{
+					sql: `INSERT INTO events (meeting_name, event_type_id, start_time, event_slug)
+	VALUES (?, ?, ?, ?)
+	ON CONFLICT(event_slug) DO UPDATE SET
+		meeting_name = excluded.meeting_name,
+		event_type_id = excluded.event_type_id,
+		start_time = excluded.start_time`,
+					args: ["FORMULA 1 AUSTRALIAN GRAND PRIX 2026", 7, 1772974800, "2026-australian-gp-race"],
+				},
+			],
+			"write",
+		);
+	});
 });
