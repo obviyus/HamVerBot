@@ -75,9 +75,11 @@ void mock.module("irc-framework", () => ({
 }));
 
 const {
+	attemptManualReconnect,
 	broadcast,
 	getClient,
 	initIrcClient,
+	isClientAuthenticated,
 	sendMessage,
 } = await import("../src/irc.ts");
 
@@ -167,9 +169,10 @@ describe("IRC client", () => {
 		const client = getClient() as unknown as FakeClient;
 		const longMessage =
 			"Header\n" +
-			Array.from({ length: 80 }, (_, index) => `PART-${index.toString().padStart(2, "0")}-END`).join(
-				" | ",
-			);
+			Array.from(
+				{ length: 80 },
+				(_, index) => `PART-${index.toString().padStart(2, "0")}-END`,
+			).join(" | ");
 
 		sendMessage("#f1", longMessage);
 
@@ -200,5 +203,152 @@ describe("IRC client", () => {
 			{ target: "#test", message: "lights out" },
 			{ target: "#main", message: "lights out" },
 		]);
+	});
+
+	test("joins configured and stored channels after SASL login", async () => {
+		getAllChannelsMock.mockResolvedValue(["#db"]);
+
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			nickPassword: "secret",
+			secure: true,
+			channels: ["#f1"],
+		});
+
+		const client = getClient() as unknown as FakeClient;
+		client.network.cap.enabled = ["sasl"];
+		client.emit("registered");
+		client.emit("loggedin", { account: "HamVerBot" });
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(isClientAuthenticated()).toBe(true);
+		expect(client.rawCalls).toContain("MODE HamVerBot +B");
+		expect(client.joinCalls).toEqual(["#f1", "#db"]);
+		expect(client.sayCalls).toEqual([]);
+	});
+
+	test("falls back to NickServ after SASL failure", async () => {
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			nickPassword: "secret",
+			secure: true,
+			channels: ["#f1"],
+		});
+
+		const client = getClient() as unknown as FakeClient;
+		client.emit("sasl failed", { reason: "bad auth" });
+
+		expect(client.sayCalls).toContainEqual({
+			target: "NickServ",
+			message: "IDENTIFY secret",
+		});
+	});
+
+	test("marks authenticated after NickServ confirmation", async () => {
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			nickPassword: "secret",
+			secure: true,
+			channels: ["#f1"],
+		});
+
+		const client = getClient() as unknown as FakeClient;
+		client.emit("message", {
+			nick: "NickServ",
+			target: "HamVerBot",
+			message: "You are now identified for HamVerBot.",
+		});
+		await Promise.resolve();
+
+		expect(isClientAuthenticated()).toBe(true);
+		expect(client.rawCalls).toContain("MODE HamVerBot +B");
+		expect(client.joinCalls).toContain("#f1");
+	});
+
+	test("switches nickname on NickServ invalid password", async () => {
+		const mathRandomSpy = spyOn(Math, "random").mockReturnValue(0.123);
+
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			nickPassword: "secret",
+			secure: true,
+			channels: ["#f1"],
+		});
+
+		const client = getClient() as unknown as FakeClient;
+		client.emit("message", {
+			nick: "NickServ",
+			target: "HamVerBot",
+			message: "Invalid password for HamVerBot",
+		});
+
+		expect(client.user.nick).toBe("HamVerBot_123");
+		mathRandomSpy.mockRestore();
+	});
+
+	test("re-registers join callback on reconnect", async () => {
+		getAllChannelsMock.mockResolvedValue(["#db"]);
+
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			secure: true,
+			channels: ["#f1"],
+		});
+
+		const client = getClient() as unknown as FakeClient;
+		client.emit("registered");
+		await Promise.resolve();
+		expect(client.joinCalls).toEqual(["#f1", "#db"]);
+
+		client.joinCalls.length = 0;
+		client.connected = false;
+		client.emit("socket close", { message: "closed" });
+		client.emit("reconnecting", { wait: 5000 });
+		client.emit("registered");
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(client.joinCalls).toEqual(["#f1", "#db"]);
+	});
+
+	test("attemptManualReconnect short-circuits when already connected", async () => {
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			secure: true,
+			channels: ["#f1"],
+		});
+
+		expect(attemptManualReconnect()).resolves.toBe(true);
+		expect(FakeClient.instances).toHaveLength(1);
+	});
+
+	test("attemptManualReconnect creates a new client when disconnected", async () => {
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			secure: true,
+			channels: ["#f1"],
+		});
+
+		const client = getClient() as unknown as FakeClient;
+		client.connected = false;
+
+		expect(attemptManualReconnect()).resolves.toBe(true);
+		expect(FakeClient.instances).toHaveLength(2);
+		expect(FakeClient.instances[1]?.connectCalls).toHaveLength(1);
 	});
 });

@@ -257,6 +257,119 @@ describe("fetchResults", () => {
 			},
 		);
 	});
+
+	test("stores fresh results by meeting name when exact type match is missing", async () => {
+		dbExecuteMock.mockImplementation(async (query: unknown) => {
+			if (typeof query === "string" && query.includes("SELECT racing_number, tla, team_name")) {
+				return {
+					rows: [{ racing_number: 1, tla: "VER", team_name: "Red Bull" }],
+				};
+			}
+
+			if (typeof query === "object" && query && "sql" in query) {
+				const sql = String(query.sql);
+
+				if (sql.includes("FROM results r")) {
+					return { rows: [] };
+				}
+
+				if (sql.includes("SELECT id FROM events WHERE meeting_name = ? AND event_type_id = ?")) {
+					return { rows: [] };
+				}
+
+				if (sql.includes("SELECT id FROM events WHERE meeting_name = ? LIMIT 1")) {
+					return { rows: [{ id: 99 }] };
+				}
+			}
+
+			return { rows: [] };
+		});
+
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+			const url = requestUrl(input);
+			if (url.endsWith("/TimingDataF1.json")) {
+				return jsonResponse({
+					Lines: {
+						"1": {
+							Position: "1",
+							RacingNumber: "1",
+							BestLapTime: { Value: "1:15.111" },
+						},
+					},
+				});
+			}
+
+			if (url.endsWith("/SessionInfo.json")) {
+				return jsonResponse({
+					Meeting: {
+						OfficialName: "Australian Grand Prix",
+						Name: "Australian Grand Prix",
+					},
+				});
+			}
+
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		getEventTypeNameMock.mockResolvedValue("Practice 2");
+
+		await fetchResults("2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Practice_2/");
+
+		expect(storeEventResultMock).toHaveBeenCalledWith(
+			99,
+			"2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Practice_2/",
+			expect.objectContaining({ title: "Australian Grand Prix: Practice 2" }),
+		);
+	});
+
+	test("skips storing results when session type cannot be derived from path", async () => {
+		dbExecuteMock.mockImplementation(async (query: unknown) => {
+			if (typeof query === "string" && query.includes("SELECT racing_number, tla, team_name")) {
+				return {
+					rows: [{ racing_number: 1, tla: "VER", team_name: "Red Bull" }],
+				};
+			}
+
+			if (typeof query === "object" && query && "sql" in query) {
+				const sql = String(query.sql);
+				if (sql.includes("FROM results r")) {
+					return { rows: [] };
+				}
+			}
+
+			return { rows: [] };
+		});
+
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+			const url = requestUrl(input);
+			if (url.endsWith("/TimingDataF1.json")) {
+				return jsonResponse({
+					Lines: {
+						"1": {
+							Position: "1",
+							RacingNumber: "1",
+							BestLapTime: { Value: "1:15.111" },
+						},
+					},
+				});
+			}
+
+			if (url.endsWith("/SessionInfo.json")) {
+				return jsonResponse({
+					Meeting: {
+						OfficialName: "Australian Grand Prix",
+						Name: "Australian Grand Prix",
+					},
+				});
+			}
+
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		await fetchResults("2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Media_Day/");
+
+		expect(storeEventResultMock).not.toHaveBeenCalled();
+	});
 });
 
 describe("standings", () => {

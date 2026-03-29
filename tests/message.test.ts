@@ -143,6 +143,150 @@ describe("handleIrcMessage", () => {
 		expect(sendMessageMock).toHaveBeenCalledWith("#f1", "⚔️ result");
 	});
 
+	test("returns next event countdown", async () => {
+		const dateNowSpy = spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 2, 1, 10, 0, 0));
+		getNextEventMock.mockResolvedValue({
+			meetingName: "Australian Grand Prix",
+			eventType: 5,
+			startTime: Math.floor(Date.UTC(2026, 2, 3, 12, 30, 0) / 1000),
+		});
+
+		await handleIrcMessage("next", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(sendMessageMock).toHaveBeenCalledWith(
+			"#f1",
+			"\x02⏱️ Australian Grand Prix: Qualifying\x02 begins in 2 days and 2 hours and 30 minutes",
+		);
+		dateNowSpy.mockRestore();
+	});
+
+	test("returns next event in requested timezone", async () => {
+		getNextEventMock.mockResolvedValue({
+			meetingName: "Bahrain Grand Prix",
+			eventType: 7,
+			startTime: Math.floor(Date.UTC(2026, 3, 12, 15, 0, 0) / 1000),
+		});
+
+		await handleIrcMessage("next utc+5:30", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(sendMessageMock).toHaveBeenCalledWith(
+			"#f1",
+			"\x02🏎️ Bahrain Grand Prix: Race\x02 starts on Sun, 12 Apr at 20:30 UTC+05:30",
+		);
+	});
+
+	test("filters next event by requested type", async () => {
+		getNextEventMock.mockResolvedValue({
+			meetingName: "British Grand Prix",
+			eventType: 2,
+			startTime: Math.floor(Date.UTC(2026, 6, 3, 11, 0, 0) / 1000),
+		});
+
+		await handleIrcMessage("when fp1", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(getNextEventMock).toHaveBeenCalledWith(2);
+		expect(sendMessageMock).toHaveBeenCalledWith(
+			"#f1",
+			expect.stringContaining("British Grand Prix: Free Practice 1"),
+		);
+	});
+
+	test("returns no upcoming events when calendar is empty", async () => {
+		getNextEventMock.mockResolvedValue(null);
+
+		await handleIrcMessage("next utc+99", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(sendMessageMock).toHaveBeenCalledWith("#f1", "No upcoming events found.");
+	});
+
+	test("returns previous session results", async () => {
+		getLatestPathMock.mockResolvedValue("2026/aus/race/");
+		fetchResultsMock.mockResolvedValue("cached results");
+
+		await handleIrcMessage("prev", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(fetchResultsMock).toHaveBeenCalledWith("2026/aus/race/");
+		expect(sendMessageMock).toHaveBeenCalledWith("#f1", "cached results");
+	});
+
+	test("returns no previous session when no result path exists", async () => {
+		getLatestPathMock.mockResolvedValue(null);
+
+		await handleIrcMessage("prev", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(sendMessageMock).toHaveBeenCalledWith("#f1", "No previous events found.");
+	});
+
+	test("returns standings and live timing commands", async () => {
+		returnWdcStandingsMock.mockResolvedValue("wdc table");
+		returnWccStandingsMock.mockResolvedValue("wcc table");
+		fetchSessionWeatherMock.mockResolvedValue("weather now");
+		fetchSessionStintsMock.mockResolvedValue("stints now");
+
+		await handleIrcMessage("drivers", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+		await handleIrcMessage("constructors", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+		await handleIrcMessage("weather", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+		await handleIrcMessage("stints", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(sendMessageMock).toHaveBeenNthCalledWith(1, "#f1", "wdc table");
+		expect(sendMessageMock).toHaveBeenNthCalledWith(2, "#f1", "wcc table");
+		expect(sendMessageMock).toHaveBeenNthCalledWith(3, "#f1", "weather now");
+		expect(sendMessageMock).toHaveBeenNthCalledWith(4, "#f1", "stints now");
+	});
+
+	test("supports command aliases", async () => {
+		await handleIrcMessage("h", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(sendMessageMock).toHaveBeenCalledWith(
+			"#f1",
+			expect.stringContaining("Available commands"),
+		);
+	});
+
 	test("rejects enable autopost in private messages", async () => {
 		await handleIrcMessage("enable autopost", {
 			target: "obviyus",
