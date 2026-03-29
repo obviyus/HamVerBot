@@ -1,3 +1,10 @@
+## [1.5.6](https://github.com/obviyus/HamVerBot/compare/v1.5.5...v1.5.6) (2026-03-29)
+
+
+### Bug Fixes
+
+* sync cancelled calendar events ([b63f0fb](https://github.com/obviyus/HamVerBot/commit/b63f0fbe24d9cb88a9622297409b1495ddc5a397))
+
 ## [1.5.5](https://github.com/obviyus/HamVerBot/compare/v1.5.4...v1.5.5) (2026-03-17)
 
 
