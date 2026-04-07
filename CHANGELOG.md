@@ -1,3 +1,10 @@
+## [1.5.7](https://github.com/obviyus/HamVerBot/compare/v1.5.6...v1.5.7) (2026-04-07)
+
+
+### Bug Fixes
+
+* wait for irc registration before rejoining ([03317dc](https://github.com/obviyus/HamVerBot/commit/03317dcb89011a2855186d9e85f0d4358637be94))
+
 ## [1.5.6](https://github.com/obviyus/HamVerBot/compare/v1.5.5...v1.5.6) (2026-03-29)
 
 
