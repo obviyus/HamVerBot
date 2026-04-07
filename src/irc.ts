@@ -116,11 +116,14 @@ let ircClient: Client | null = null;
 // Track authentication status
 let isAuthenticated = false;
 
-// Store authentication callbacks
-const authCallbacks: (() => void)[] = [];
+// Track whether the IRC server registration handshake completed.
+let isRegistered = false;
 
-// Track whether a join callback is registered for the next auth cycle.
-let joinOnAuthRegistered = false;
+// Store authentication callbacks
+const readyCallbacks: (() => void)[] = [];
+
+// Track whether a join callback is registered for the next ready cycle.
+let joinOnReadyRegistered = false;
 
 // Store configured channels for reconnect joins.
 let configuredChannels: string[] = [];
@@ -147,49 +150,74 @@ function shouldUseBunTlsIpv4Workaround(server: string, secure?: boolean): boolea
 	return typeof Bun !== "undefined" && !!secure && LIBERA_HOST_REGEX.test(server);
 }
 
-/**
- * Register a callback to be executed after authentication
- * @param callback - Function to call after authentication completes
- */
-export function onAuthenticated(callback: () => void): void {
-	if (isAuthenticated) {
-		// If already authenticated, execute immediately
-		callback();
-	} else {
-		// Otherwise, store for later execution
-		authCallbacks.push(callback);
-	}
+function isClientReady(): boolean {
+	return isRegistered && isAuthenticated;
 }
 
 /**
- * Ensure we re-join channels after authentication.
+ * Register a callback to be executed after the connection is ready for joins.
  */
-function registerJoinOnAuth(reason: string): void {
-	if (joinOnAuthRegistered) return;
-	joinOnAuthRegistered = true;
+export function onReady(callback: () => void): void {
+	if (isClientReady()) {
+		callback();
+		return;
+	}
 
-	// AIDEV-NOTE: Re-register join-on-auth per reconnect; auth callbacks are one-shot.
-	onAuthenticated(async () => {
-		joinOnAuthRegistered = false;
-		console.log(`Authentication complete (${reason}), joining channels...`);
+	readyCallbacks.push(callback);
+}
+
+/**
+ * Ensure we re-join channels after registration and authentication.
+ */
+function registerJoinOnReady(reason: string): void {
+	if (joinOnReadyRegistered) return;
+	joinOnReadyRegistered = true;
+
+	// AIDEV-NOTE: Re-register join-on-ready per reconnect; ready callbacks are one-shot.
+	onReady(async () => {
+		joinOnReadyRegistered = false;
+		console.log(`Connection ready (${reason}), joining channels...`);
 		const channels = await resolveJoinChannels();
 		joinChannels(channels);
 	});
 }
 
 /**
- * Execute all registered authentication callbacks
+ * Execute all registered ready callbacks
  */
-function executeAuthCallbacks(): void {
+function executeReadyCallbacks(): void {
 	let callback: (() => void) | undefined;
-	while ((callback = authCallbacks.shift())) callback();
+	while ((callback = readyCallbacks.shift())) callback();
+}
+
+function maybeMarkReady(client: Client): void {
+	if (!isClientReady()) return;
+
+	setBotMode(client);
+	executeReadyCallbacks();
 }
 
 function markAuthenticated(client: Client, logMessage: string): void {
 	isAuthenticated = true;
 	console.log(logMessage);
-	setBotMode(client);
-	executeAuthCallbacks();
+	maybeMarkReady(client);
+}
+
+function markRegistered(client: Client, nickPassword?: string): void {
+	isRegistered = true;
+	console.log("Connected to IRC server...");
+	if (!hasConfiguredNickPassword(nickPassword)) {
+		isAuthenticated = true;
+		console.log("No authentication required, ready to join channels");
+	}
+	maybeMarkReady(client);
+}
+
+function resetConnectionState(): void {
+	isAuthenticated = false;
+	isRegistered = false;
+	joinOnReadyRegistered = false;
+	readyCallbacks.length = 0;
 }
 
 function connectClient(client: Client, config: IrcClientConfig): void {
@@ -223,12 +251,13 @@ function connectClient(client: Client, config: IrcClientConfig): void {
 }
 
 function createAndConnectClient(config: IrcClientConfig, joinReason: string): Client {
+	resetConnectionState();
 	const client = new IRC.Client();
 	ircClient = client;
 	configuredChannels = config.channels || [];
 
 	initEventListeners(client, config.nickname, config.nickPassword);
-	registerJoinOnAuth(joinReason);
+	registerJoinOnReady(joinReason);
 	connectClient(client, config);
 
 	return client;
@@ -426,21 +455,20 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 
 	// Handle successful registration with the server
 	client.on("registered", () => {
-		console.log("Connected to IRC server...");
-
 		// If SASL is not being used, fall back to NickServ authentication
 		if (hasConfiguredNickPassword(nickPassword)) {
 			// Check if SASL capability is enabled - if not, use NickServ
 			const clientWithNetwork = client as Client & { network?: IrcNetwork };
 			const caps = clientWithNetwork.network?.cap?.enabled || [];
 			if (!caps.includes("sasl")) {
+				isRegistered = true;
+				console.log("Connected to IRC server...");
 				authenticateWithNickServ(nickname, nickPassword);
+				return;
 			}
-			return;
 		}
 
-		// No authentication configured; treat registration as authenticated.
-		markAuthenticated(client, "No authentication required, ready to join channels");
+		markRegistered(client, nickPassword);
 	});
 
 	// Handle SASL login events
@@ -476,7 +504,7 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 	// Handle connection close
 	client.on("close", () => {
 		console.log("Connection closed. Attempting to reconnect...");
-		isAuthenticated = false; // Reset authentication status
+		resetConnectionState();
 	});
 
 	// Handle socket errors
@@ -491,7 +519,7 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 			console.log("Socket close full error:", JSON.stringify(error));
 		}
 
-		isAuthenticated = false; // Reset authentication status
+		resetConnectionState();
 
 		// Log connection status
 		console.log(
@@ -500,15 +528,13 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		);
 		console.log("Auto reconnect is enabled, will attempt to reconnect shortly...");
 
-		// Allow join-on-auth to be registered for the next connection
-		joinOnAuthRegistered = false;
 	});
 
 	// Handle reconnections
 	client.on("reconnecting", (opts: unknown) => {
 		const options = opts as { wait: number };
 		console.log(`Reconnecting to IRC server in ${options.wait / 1000} seconds...`);
-		registerJoinOnAuth("reconnect");
+		registerJoinOnReady("reconnect");
 	});
 
 	// Handle successful reconnection
@@ -686,6 +712,7 @@ export function disconnect(message?: string): void {
 	const client = getClient();
 	client.quit(message || "Disconnecting");
 	ircClient = null;
+	resetConnectionState();
 	console.log("Disconnected from IRC server");
 }
 

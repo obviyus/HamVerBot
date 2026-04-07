@@ -230,6 +230,32 @@ describe("IRC client", () => {
 		expect(client.sayCalls).toEqual([]);
 	});
 
+	test("waits for registered before joining after SASL login", async () => {
+		getAllChannelsMock.mockResolvedValue(["#db"]);
+
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			nickPassword: "secret",
+			secure: true,
+			channels: ["#f1"],
+		});
+
+		const client = getClient() as unknown as FakeClient;
+		client.network.cap.enabled = ["sasl"];
+		client.emit("loggedin", { account: "HamVerBot" });
+		await Promise.resolve();
+
+		expect(client.joinCalls).toEqual([]);
+
+		client.emit("registered");
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(client.joinCalls).toEqual(["#f1", "#db"]);
+	});
+
 	test("falls back to NickServ after SASL failure", async () => {
 		await initIrcClient({
 			server: "irc.libera.chat",
@@ -260,11 +286,13 @@ describe("IRC client", () => {
 		});
 
 		const client = getClient() as unknown as FakeClient;
+		client.emit("registered");
 		client.emit("message", {
 			nick: "NickServ",
 			target: "HamVerBot",
 			message: "You are now identified for HamVerBot.",
 		});
+		await Promise.resolve();
 		await Promise.resolve();
 
 		expect(isClientAuthenticated()).toBe(true);
@@ -308,6 +336,7 @@ describe("IRC client", () => {
 
 		const client = getClient() as unknown as FakeClient;
 		client.emit("registered");
+		await Promise.resolve();
 		await Promise.resolve();
 		expect(client.joinCalls).toEqual(["#f1", "#db"]);
 
