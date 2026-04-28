@@ -67,10 +67,7 @@ const jobHandlers: Record<JobType, () => Promise<unknown>> = {
 		});
 		if (newMessages.length === 0) return;
 
-		await markAutopostMessagesSeen(
-			session.Path,
-			newMessages.map(buildRaceControlMessageKey),
-		);
+		await markAutopostMessagesSeen(session.Path, newMessages.map(buildRaceControlMessageKey));
 
 		for (const message of newMessages) {
 			const formattedMessage = formatAutopostRaceControlMessage(session, message);

@@ -113,7 +113,10 @@ export function isClientAuthenticated(): boolean {
 
 function sendWithLogging(target: string, message: string): void {
 	const client = getClient();
-	const sanitized = message.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+	const sanitized = message
+		.replace(/[\r\n]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
 	const maxBytes = IRC_MAX_LINE_BYTES - Buffer.byteLength(`PRIVMSG ${target} :`);
 	let normalizedMessage = sanitized;
 	if (Buffer.byteLength(sanitized) > maxBytes) {
@@ -215,7 +218,9 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 
 	client.on("loggedin", (event: unknown) => {
 		isAuthenticated = true;
-		console.log(`Successfully authenticated with SASL as ${(event as { account: string }).account}`);
+		console.log(
+			`Successfully authenticated with SASL as ${(event as { account: string }).account}`,
+		);
 		maybeMarkReady(client);
 	});
 
@@ -327,7 +332,9 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 
 	client.on("part", (event: unknown) => {
 		const partEvent = event as { nick: string; channel: string; message?: string };
-		console.log(`${partEvent.nick} left ${partEvent.channel}: ${partEvent.message || "No message"}`);
+		console.log(
+			`${partEvent.nick} left ${partEvent.channel}: ${partEvent.message || "No message"}`,
+		);
 	});
 
 	client.on("quit", (event: unknown) => {
@@ -391,4 +398,3 @@ export async function attemptManualReconnect(): Promise<boolean> {
 		return false;
 	}
 }
-

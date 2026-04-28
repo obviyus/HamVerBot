@@ -52,10 +52,7 @@ export async function start(): Promise<void> {
 	console.log(`${irc.nickname} started successfully...`);
 }
 
-export function registerSignalHandlers(
-	on: OnFn = defaultOn,
-	exit: ExitFn = defaultExit,
-): void {
+export function registerSignalHandlers(on: OnFn = defaultOn, exit: ExitFn = defaultExit): void {
 	on("SIGINT", () => {
 		console.log("Received SIGINT. Shutting down...");
 		getClient().quit("Grazzi ragazzi!");
@@ -63,10 +60,7 @@ export function registerSignalHandlers(
 	});
 }
 
-export async function main(
-	exit: ExitFn = defaultExit,
-	on: OnFn = defaultOn,
-): Promise<void> {
+export async function main(exit: ExitFn = defaultExit, on: OnFn = defaultOn): Promise<void> {
 	try {
 		await start();
 		registerSignalHandlers(on, exit);

@@ -48,7 +48,10 @@ const statements = result.rows
 		return row.sql;
 	})
 	.map((sql) => {
-		let normalized = sql.trim().replace(/\r\n/g, "\n").replace(/\n[ \t]+/g, "\n  ");
+		let normalized = sql
+			.trim()
+			.replace(/\r\n/g, "\n")
+			.replace(/\n[ \t]+/g, "\n  ");
 		for (const [expanded, compact] of IF_NOT_EXISTS_REPLACEMENTS) {
 			if (normalized.startsWith(compact) && !normalized.startsWith(expanded)) {
 				normalized = normalized.replace(compact, expanded);

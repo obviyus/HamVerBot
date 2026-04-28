@@ -7,75 +7,65 @@
 
 ## [1.5.6](https://github.com/obviyus/HamVerBot/compare/v1.5.5...v1.5.6) (2026-03-29)
 
-
 ### Bug Fixes
 
-* sync cancelled calendar events ([b63f0fb](https://github.com/obviyus/HamVerBot/commit/b63f0fbe24d9cb88a9622297409b1495ddc5a397))
+- sync cancelled calendar events ([b63f0fb](https://github.com/obviyus/HamVerBot/commit/b63f0fbe24d9cb88a9622297409b1495ddc5a397))
 
 ## [1.5.5](https://github.com/obviyus/HamVerBot/compare/v1.5.4...v1.5.5) (2026-03-17)
 
-
 ### Performance Improvements
 
-* **db:** reduce turso round-trips ([69c119c](https://github.com/obviyus/HamVerBot/commit/69c119c223e5aab1a1c156f475c19b8d73954c59))
+- **db:** reduce turso round-trips ([69c119c](https://github.com/obviyus/HamVerBot/commit/69c119c223e5aab1a1c156f475c19b8d73954c59))
 
 ## [1.5.4](https://github.com/obviyus/HamVerBot/compare/v1.5.3...v1.5.4) (2026-03-08)
 
-
 ### Bug Fixes
 
-* **live-timing:** restore live pitstops ([20a280b](https://github.com/obviyus/HamVerBot/commit/20a280b5eeb02de3eefffdea2ff6d9fda9cce4fb))
+- **live-timing:** restore live pitstops ([20a280b](https://github.com/obviyus/HamVerBot/commit/20a280b5eeb02de3eefffdea2ff6d9fda9cce4fb))
 
 ## [1.5.3](https://github.com/obviyus/HamVerBot/compare/v1.5.2...v1.5.3) (2026-03-07)
 
-
 ### Bug Fixes
 
-* **live-timing:** unify current session transport ([15aeeb6](https://github.com/obviyus/HamVerBot/commit/15aeeb6f3e2de1981c15daefb22c033a94dd8f22))
+- **live-timing:** unify current session transport ([15aeeb6](https://github.com/obviyus/HamVerBot/commit/15aeeb6f3e2de1981c15daefb22c033a94dd8f22))
 
 ## [1.5.2](https://github.com/obviyus/HamVerBot/compare/v1.5.1...v1.5.2) (2026-03-07)
 
-
 ### Bug Fixes
 
-* **live-timing:** add bun-safe signalr http client ([f41cd03](https://github.com/obviyus/HamVerBot/commit/f41cd03973d36406f76a0cc25b6869590aaee41d))
+- **live-timing:** add bun-safe signalr http client ([f41cd03](https://github.com/obviyus/HamVerBot/commit/f41cd03973d36406f76a0cc25b6869590aaee41d))
 
 ## [1.5.1](https://github.com/obviyus/HamVerBot/compare/v1.5.0...v1.5.1) (2026-03-07)
 
-
 ### Bug Fixes
 
-* **live-timing:** use signalr for live race control ([7b3fdd1](https://github.com/obviyus/HamVerBot/commit/7b3fdd19ed6cb607e61ebec5161e343349304e31))
+- **live-timing:** use signalr for live race control ([7b3fdd1](https://github.com/obviyus/HamVerBot/commit/7b3fdd19ed6cb607e61ebec5161e343349304e31))
 
 # [1.5.0](https://github.com/obviyus/HamVerBot/compare/v1.4.8...v1.5.0) (2026-03-07)
 
-
 ### Bug Fixes
 
-* **events:** prioritize sprint qualifying aliases ([f43b608](https://github.com/obviyus/HamVerBot/commit/f43b608decd0515101c16ff752e07db491d93472))
-* **standings:** handle empty current-season results ([fe8b751](https://github.com/obviyus/HamVerBot/commit/fe8b751b5f7da0f4ff87e35bd91e5204523530e2))
-
+- **events:** prioritize sprint qualifying aliases ([f43b608](https://github.com/obviyus/HamVerBot/commit/f43b608decd0515101c16ff752e07db491d93472))
+- **standings:** handle empty current-season results ([fe8b751](https://github.com/obviyus/HamVerBot/commit/fe8b751b5f7da0f4ff87e35bd91e5204523530e2))
 
 ### Features
 
-* **autopost:** add channel race control alerts ([6f9a939](https://github.com/obviyus/HamVerBot/commit/6f9a939f6c803659209c6b19ff83399f9bf4475f))
-* **commands:** add driver head-to-head command ([6379506](https://github.com/obviyus/HamVerBot/commit/63795062559d6782f549d7324be959e3654c268d))
-* **commands:** add live timing commands and safe replies ([92db369](https://github.com/obviyus/HamVerBot/commit/92db369589ab9d35df846b00a557745da450b654))
+- **autopost:** add channel race control alerts ([6f9a939](https://github.com/obviyus/HamVerBot/commit/6f9a939f6c803659209c6b19ff83399f9bf4475f))
+- **commands:** add driver head-to-head command ([6379506](https://github.com/obviyus/HamVerBot/commit/63795062559d6782f549d7324be959e3654c268d))
+- **commands:** add live timing commands and safe replies ([92db369](https://github.com/obviyus/HamVerBot/commit/92db369589ab9d35df846b00a557745da450b654))
 
 ## [1.4.8](https://github.com/obviyus/HamVerBot/compare/v1.4.7...v1.4.8) (2026-02-15)
 
-
 ### Bug Fixes
 
-* **calendar:** guard parsed ics event fields ([306c2bb](https://github.com/obviyus/HamVerBot/commit/306c2bbc683d41193deef13edb9d1af3b12f8826))
-* **lint:** resolve type-aware async warnings ([82550b4](https://github.com/obviyus/HamVerBot/commit/82550b46394b2567d9fce070ecf1ce74abc65682))
+- **calendar:** guard parsed ics event fields ([306c2bb](https://github.com/obviyus/HamVerBot/commit/306c2bbc683d41193deef13edb9d1af3b12f8826))
+- **lint:** resolve type-aware async warnings ([82550b4](https://github.com/obviyus/HamVerBot/commit/82550b46394b2567d9fce070ecf1ce74abc65682))
 
 ## [1.4.7](https://github.com/obviyus/HamVerBot/compare/v1.4.6...v1.4.7) (2026-02-15)
 
-
 ### Bug Fixes
 
-* **irc:** force ipv4 for bun tls libera ([004b433](https://github.com/obviyus/HamVerBot/commit/004b4334aa9520970efc67c72087fc7ec9db73c2))
+- **irc:** force ipv4 for bun tls libera ([004b433](https://github.com/obviyus/HamVerBot/commit/004b4334aa9520970efc67c72087fc7ec9db73c2))
 
 ## [1.4.6](https://github.com/obviyus/HamVerBot/compare/v1.4.5...v1.4.6) (2026-01-08)
 
