@@ -1,25 +1,14 @@
 import { EventType } from "~/types/event-type";
 
-const typeNames: Record<EventType, string> = {
-	[EventType.LiveryReveal]: "Livery Reveal",
-	[EventType.FreePractice1]: "Free Practice 1",
-	[EventType.FreePractice2]: "Free Practice 2",
-	[EventType.FreePractice3]: "Free Practice 3",
-	[EventType.Qualifying]: "Qualifying",
-	[EventType.Sprint]: "Sprint",
-	[EventType.Race]: "Race",
-	[EventType.SprintQualifying]: "Sprint Qualifying",
-};
-
-const typeEmojis: Record<EventType, string> = {
-	[EventType.LiveryReveal]: "🎨",
-	[EventType.FreePractice1]: "🏎️",
-	[EventType.FreePractice2]: "🏎️",
-	[EventType.FreePractice3]: "🏎️",
-	[EventType.Qualifying]: "⏱️",
-	[EventType.Sprint]: "🏁",
-	[EventType.Race]: "🏎️",
-	[EventType.SprintQualifying]: "⏱️",
+const eventTypeMetadata: Record<EventType, { name: string; emoji: string }> = {
+	[EventType.LiveryReveal]: { name: "Livery Reveal", emoji: "🎨" },
+	[EventType.FreePractice1]: { name: "Free Practice 1", emoji: "🏎️" },
+	[EventType.FreePractice2]: { name: "Free Practice 2", emoji: "🏎️" },
+	[EventType.FreePractice3]: { name: "Free Practice 3", emoji: "🏎️" },
+	[EventType.Qualifying]: { name: "Qualifying", emoji: "⏱️" },
+	[EventType.Sprint]: { name: "Sprint", emoji: "🏁" },
+	[EventType.Race]: { name: "Race", emoji: "🏎️" },
+	[EventType.SprintQualifying]: { name: "Sprint Qualifying", emoji: "⏱️" },
 };
 
 const stringMap: Array<[string, EventType]> = [
@@ -63,20 +52,16 @@ const sessionKeyMap: Record<string, EventType> = {
 };
 
 export function eventTypeToString(eventType: EventType): string {
-	return typeNames[eventType] ?? "Unknown";
+	return eventTypeMetadata[eventType].name;
 }
 
 export function eventTypeToEmoji(eventType: EventType): string {
-	return typeEmojis[eventType] ?? "🏎️";
+	return eventTypeMetadata[eventType].emoji;
 }
 
 export function stringToEventType(str?: string): EventType | undefined {
-	if (!str) return undefined;
-	const lower = str.toLowerCase();
-	for (const [key, value] of stringMap) {
-		if (lower.includes(key)) return value;
-	}
-	return undefined;
+	const lower = str?.toLowerCase();
+	return lower ? stringMap.find(([key]) => lower.includes(key))?.[1] : undefined;
 }
 
 export function sessionKeyToEventType(key: string): EventType | null {

@@ -3,6 +3,11 @@ import { dirname, resolve } from "node:path";
 import { createClient } from "@libsql/client";
 
 const DEFAULT_OUTPUT_PATH = "db/schema.sql";
+const IF_NOT_EXISTS_REPLACEMENTS = [
+	["CREATE TABLE IF NOT EXISTS ", "CREATE TABLE "],
+	["CREATE UNIQUE INDEX IF NOT EXISTS ", "CREATE UNIQUE INDEX "],
+	["CREATE INDEX IF NOT EXISTS ", "CREATE INDEX "],
+] as const;
 
 const targetPath = resolve(Bun.argv[2] ?? DEFAULT_OUTPUT_PATH);
 const databaseUrl = Bun.env.TURSO_DATABASE_URL;
@@ -34,51 +39,28 @@ const result = await db.execute(`
 		name
 `);
 
-function getSqlStatement(row: Record<string, unknown>): string {
-	if (typeof row.sql !== "string") {
-		throw new Error("Invalid sqlite_master row: expected sql to be a string");
-	}
-
-	return row.sql;
-}
-
-function normalizeStatement(sql: string): string {
-	let normalized = sql
-		.trim()
-		.replace(/\r\n/g, "\n")
-		.replace(/\n[ \t]+/g, "\n  ");
-
-	if (
-		normalized.startsWith("CREATE TABLE ") &&
-		!normalized.startsWith("CREATE TABLE IF NOT EXISTS ")
-	) {
-		normalized = normalized.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ");
-	}
-
-	if (
-		normalized.startsWith("CREATE UNIQUE INDEX ") &&
-		!normalized.startsWith("CREATE UNIQUE INDEX IF NOT EXISTS ")
-	) {
-		normalized = normalized.replace("CREATE UNIQUE INDEX ", "CREATE UNIQUE INDEX IF NOT EXISTS ");
-	}
-
-	if (
-		normalized.startsWith("CREATE INDEX ") &&
-		!normalized.startsWith("CREATE INDEX IF NOT EXISTS ")
-	) {
-		normalized = normalized.replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ");
-	}
-
-	return normalized
-		.split("\n")
-		.map((line) => line.replace(/[ \t]+$/g, ""))
-		.join("\n");
-}
-
 const statements = result.rows
-	.map(getSqlStatement)
-	.map(normalizeStatement)
-	.map((sql) => `${sql};`);
+	.map((row) => {
+		if (typeof row.sql !== "string") {
+			throw new Error("Invalid sqlite_master row: expected sql to be a string");
+		}
+
+		return row.sql;
+	})
+	.map((sql) => {
+		let normalized = sql.trim().replace(/\r\n/g, "\n").replace(/\n[ \t]+/g, "\n  ");
+		for (const [expanded, compact] of IF_NOT_EXISTS_REPLACEMENTS) {
+			if (normalized.startsWith(compact) && !normalized.startsWith(expanded)) {
+				normalized = normalized.replace(compact, expanded);
+				break;
+			}
+		}
+
+		return `${normalized
+			.split("\n")
+			.map((line) => line.replace(/[ \t]+$/g, ""))
+			.join("\n")};`;
+	});
 
 if (statements.length === 0) {
 	throw new Error("No schema statements found in sqlite_master");

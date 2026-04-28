@@ -24,258 +24,113 @@ interface CommandContext {
 	isPrivate: boolean;
 }
 
-/**
- * Parse a timezone argument string (e.g., "utc+1", "gmt-5:30", "+1", "-5:30")
- * @param arg - The timezone argument string
- * @returns The parsed timezone offset in minutes or undefined if invalid
- */
 function parseTimezone(arg?: string): number | undefined {
 	if (!arg) return undefined;
 
-	// Convert to lowercase for case-insensitive comparison
-	const lowerArg = arg.toLowerCase();
+	const normalized = arg.toLowerCase();
+	const offset = normalized.startsWith("utc") || normalized.startsWith("gmt")
+		? normalized.slice(3)
+		: normalized;
+	if (offset === "") return 0;
 
-	// Handle prefixed case (utc/gmt)
-	if (lowerArg.startsWith("utc") || lowerArg.startsWith("gmt")) {
-		// Handle UTC/GMT+0 case
-		const offsetStr = lowerArg.substring(3);
-		if (offsetStr.length === 0) {
-			return 0;
-		}
+	const match = /^([+-]?)(\d{1,2})(?::(\d{1,2}))?$/.exec(offset);
+	if (!match) return undefined;
 
-		return parseOffset(offsetStr);
-	}
-
-	// No prefix, try to parse directly
-	return parseOffset(lowerArg);
-}
-
-/**
- * Parse an offset string like "+1", "-5:30"
- * @param offsetStr - The offset string to parse
- * @returns The offset in minutes or undefined if invalid
- */
-function parseOffset(offsetStr: string): number | undefined {
-	// Parse sign and offset
-	const firstChar = offsetStr.charAt(0);
-	const sign = firstChar === "-" ? -1 : 1;
-
-	// Skip sign character if present
-	const offsetValue = firstChar === "+" || firstChar === "-" ? offsetStr.substring(1) : offsetStr;
-
-	// Parse hours and optional minutes
-	const parts = offsetValue.split(":");
-
-	let seconds: number;
-	if (parts.length === 1) {
-		// Just hours
-		const hours = Number.parseInt(parts[0], 10);
-		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign)) return undefined;
-		seconds = hours * 3600;
-	} else if (parts.length === 2) {
-		// Hours and minutes
-		const hours = Number.parseInt(parts[0], 10);
-		const minutes = Number.parseInt(parts[1], 10);
-		if (Number.isNaN(hours) || !isValidHoursOffset(hours * sign)) return undefined;
-		if (Number.isNaN(minutes) || !isValidMinutesOffset(minutes)) return undefined;
-		seconds = hours * 3600 + minutes * 60;
-	} else {
+	const sign = match[1] === "-" ? -1 : 1;
+	const hours = Number.parseInt(match[2], 10) * sign;
+	const minutes = Number.parseInt(match[3] || "0", 10);
+	if (hours < -12 || hours > 14 || minutes < 0 || minutes > 59) {
 		return undefined;
 	}
 
-	return (seconds * sign) / 60;
+	return hours * 60 + minutes * sign;
 }
 
-/**
- * Check if the hours offset is within valid range (from -12 to +14)
- * @param signedOffset - A signed hours offset
- * @returns True if the offset is within the range
- */
-function isValidHoursOffset(signedOffset: number): boolean {
-	const minHoursOffset = -12,
-		maxHoursOffset = 14;
+async function getNextEventMessage(eventType?: EventType, timezone?: number): Promise<string> {
+	const event = await getNextEvent(eventType);
+	if (!event) {
+		return "No upcoming events found.";
+	}
 
-	return signedOffset >= minHoursOffset && signedOffset <= maxHoursOffset;
-}
-
-/**
- * Check if the minutes offset is within valid range (from 0 to 59)
- * @param minutes - A minutes offset
- * @returns True if minutes are within the range
- */
-function isValidMinutesOffset(minutes: number): boolean {
-	const minMinutesOffset = 0,
-		maxMinutesOffset = 59;
-
-	return minutes >= minMinutesOffset && minutes <= maxMinutesOffset;
-}
-
-/**
- * Build a time string for an event
- * @param eventName - The name of the event
- * @param eventTime - The timestamp of the event
- * @param timezone - Optional timezone offset in minutes
- * @returns The formatted time string
- */
-function buildTimeString(eventName: string, eventTime: number, timezone?: number): string {
-	const eventDate = new Date(eventTime * 1000);
-
+	const eventName = `${eventTypeToEmoji(event.eventType)} ${event.meetingName}: ${eventTypeToString(event.eventType)}`;
+	const eventDate = new Date(event.startTime * 1000);
 	if (timezone !== undefined) {
-		// Convert to the specified timezone
-		const offsetMinutes = timezone;
-		const localTime = new Date(eventDate.getTime() + offsetMinutes * 60 * 1000);
-
-		// Format the timezone string
-		const tzHours = Math.abs(Math.floor(offsetMinutes / 60));
-		const tzMinutes = Math.abs(offsetMinutes % 60);
-		const tzSign = offsetMinutes >= 0 ? "+" : "-";
+		const localTime = new Date(eventDate.getTime() + timezone * 60 * 1000);
+		const tzHours = Math.abs(Math.floor(timezone / 60));
+		const tzMinutes = Math.abs(timezone % 60);
+		const tzSign = timezone >= 0 ? "+" : "-";
 		const tzStr = `${tzSign}${tzHours.toString().padStart(2, "0")}:${tzMinutes.toString().padStart(2, "0")}`;
-
-		// Format the date: "Day, Month Date"
 		const dateStr = localTime.toUTCString().split(" ").slice(0, 3).join(" ");
 
 		return `\x02${eventName}\x02 starts on ${dateStr} at ${localTime.getUTCHours().toString().padStart(2, "0")}:${localTime.getUTCMinutes().toString().padStart(2, "0")} UTC${tzStr}`;
 	}
 
-	// Calculate time left
-	const timeLeft = eventDate.getTime() - Date.now();
-	const timeLeftString = formatDuration(timeLeft);
+	const durationMs = eventDate.getTime() - Date.now();
+	if (durationMs <= 0) {
+		return `\x02${eventName}\x02 begins in 0 seconds`;
+	}
+
+	const totalMinutes = Math.floor(durationMs / 60000);
+	const days = Math.floor(totalMinutes / (24 * 60));
+	const hours = Math.floor(totalMinutes / 60) % 24;
+	const minutes = totalMinutes % 60;
+	const timeLeftString = [
+		days > 0 ? `${days} day${days === 1 ? "" : "s"}` : null,
+		hours > 0 || days > 0 ? `${hours} hour${hours === 1 ? "" : "s"}` : null,
+		minutes > 0 || hours > 0 || days > 0
+			? `${minutes} minute${minutes === 1 ? "" : "s"}`
+			: null,
+	]
+		.filter((part): part is string => part !== null)
+		.join(" and ");
 
 	return `\x02${eventName}\x02 begins in ${timeLeftString}`;
 }
 
-/**
- * Format a duration in milliseconds to a human-readable string
- * @param durationMs - The duration in milliseconds
- * @returns The formatted duration string
- */
-function formatDuration(durationMs: number): string {
-	if (durationMs <= 0) {
-		return "0 seconds";
-	}
+type CommandHandler = (args: string[], context: CommandContext) => Promise<string>;
 
-	const seconds = Math.floor(durationMs / 1000);
-	const days = Math.floor(seconds / 86400);
-	const hours = Math.floor((seconds % 86400) / 3600);
-	const minutes = Math.floor((seconds % 3600) / 60);
-
-	const durationParts: string[] = [];
-
-	if (days > 0) {
-		durationParts.push(`${days} ${pluralize("day", days)}`);
-	}
-
-	if (hours > 0 || durationParts.length > 0) {
-		durationParts.push(`${hours} ${pluralize("hour", hours)}`);
-	}
-
-	if (minutes > 0 || durationParts.length > 0) {
-		durationParts.push(`${minutes} ${pluralize("minute", minutes)}`);
-	}
-
-	return durationParts.join(" and ");
+function withErrorReply(
+	errorLabel: string,
+	failureMessage: string,
+	handler: CommandHandler,
+): CommandHandler {
+	return (args, context) => {
+		return handler(args, context).catch((error) => {
+			console.error(`${errorLabel}:`, error);
+			return failureMessage;
+		});
+	};
 }
 
-/**
- * Pluralize a word based on count
- * @param word - The word to pluralize
- * @param count - The count
- * @returns The pluralized word
- */
-function pluralize(word: string, count: number): string {
-	return `${word}${count === 1 ? "" : "s"}`;
-}
-
-/**
- * Get next event and format response message
- */
-async function getNextEventMessage(eventType?: EventType, timezone?: number): Promise<string> {
-	const event = await getNextEvent(eventType);
-
-	if (!event) {
-		return "No upcoming events found.";
-	}
-
-	const { meetingName, eventType: type, startTime } = event;
-	const emoji = eventTypeToEmoji(type);
-	return buildTimeString(
-		`${emoji} ${meetingName}: ${eventTypeToString(type)}`,
-		startTime,
-		timezone,
-	);
-}
-
-// Command handler functions
-function isOwnerNick(nick: string): boolean {
-	return appConfig.irc.owners.some((owner) => owner.trim().toLowerCase() === nick.toLowerCase());
-}
-
-async function enableAutopost(target: string): Promise<string> {
-	if (await isAutopostChannelEnabled(target)) {
-		return "Autopost already enabled here.";
-	}
-
-	const { session, messages } = await fetchCurrentSessionRaceControlMessages();
-	const relevantMessageKeys = messages
-		.filter(shouldAutopostRaceControlMessage)
-		.map(buildRaceControlMessageKey);
-
-	await markAutopostMessagesSeen(session.Path, relevantMessageKeys);
-	await enableAutopostChannel(target);
-
-	return `Autopost enabled in ${target}. Watching red flags, safety car, penalties.`;
-}
-
-const commandHandlers: Record<
-	string,
-	(args: string[], context: CommandContext) => Promise<string>
-> = {
+const commandHandlers: Record<string, CommandHandler> = {
 	ping: async () => "pong",
 
-	next: async (args) => {
-		const timezone = parseTimezone(args[0]);
-		return await getNextEventMessage(undefined, timezone);
-	},
+	next: async (args) => getNextEventMessage(undefined, parseTimezone(args[0])),
 
-	when: async (args) => {
-		const eventType = stringToEventType(args[0]);
-		const timezone = parseTimezone(args[1]);
-		return await getNextEventMessage(eventType, timezone);
-	},
+	when: async (args) => getNextEventMessage(stringToEventType(args[0]), parseTimezone(args[1])),
 
-	prev: async () => {
+	prev: withErrorReply("Error fetching results", "Failed to fetch results.", async () => {
 		const path = await getLatestPath();
 		if (!path) {
 			return "No previous events found.";
 		}
 
-		try {
-			return await fetchResults(path);
-		} catch (error) {
-			console.error("Error fetching results:", error);
-			return "Failed to fetch results.";
-		}
-	},
+		return fetchResults(path);
+	}),
 
-	drivers: async () => {
-		try {
-			return (await returnWdcStandings()) || "No standings available.";
-		} catch (error) {
-			console.error("Error fetching WDC standings:", error);
-			return "Failed to fetch standings.";
-		}
-	},
+	drivers: withErrorReply("Error fetching WDC standings", "Failed to fetch standings.", async () => {
+		return (await returnWdcStandings()) || "No standings available.";
+	}),
 
-	constructors: async () => {
-		try {
+	constructors: withErrorReply(
+		"Error fetching WCC standings",
+		"Failed to fetch standings.",
+		async () => {
 			return (await returnWccStandings()) || "No standings available.";
-		} catch (error) {
-			console.error("Error fetching WCC standings:", error);
-			return "Failed to fetch standings.";
-		}
-	},
+		},
+	),
 
-	h2h: async (args) => {
+	h2h: withErrorReply("Error fetching H2H", "Failed to fetch H2H.", async (args) => {
 		if (args.length !== 2) {
 			return "Usage: !h2h VER HAM";
 		}
@@ -289,33 +144,18 @@ const commandHandlers: Record<
 			return "Pick two different drivers.";
 		}
 
-		try {
-			return await fetchHeadToHead(leftCode, rightCode);
-		} catch (error) {
-			console.error("Error fetching H2H:", error);
-			return "Failed to fetch H2H.";
-		}
-	},
+		return fetchHeadToHead(leftCode, rightCode);
+	}),
 
-	weather: async () => {
-		try {
-			return await fetchSessionWeather();
-		} catch (error) {
-			console.error("Error fetching weather:", error);
-			return "Failed to fetch weather.";
-		}
-	},
+	weather: withErrorReply("Error fetching weather", "Failed to fetch weather.", async () => {
+		return fetchSessionWeather();
+	}),
 
-	stints: async () => {
-		try {
-			return await fetchSessionStints();
-		} catch (error) {
-			console.error("Error fetching stints:", error);
-			return "Failed to fetch stints.";
-		}
-	},
+	stints: withErrorReply("Error fetching stints", "Failed to fetch stints.", async () => {
+		return fetchSessionStints();
+	}),
 
-	enable: async (args, context) => {
+	enable: withErrorReply("Error enabling autopost", "Failed to enable autopost.", async (args, context) => {
 		if (args[0] !== "autopost") {
 			return "Usage: !enable autopost";
 		}
@@ -324,24 +164,28 @@ const commandHandlers: Record<
 			return "Run this in the channel you want to enable.";
 		}
 
-		if (!isOwnerNick(context.nick)) {
+		if (!appConfig.irc.owners.some((owner) => owner.trim().toLowerCase() === context.nick.toLowerCase())) {
 			return "Only bot owners can enable autopost.";
 		}
 
-		try {
-			return await enableAutopost(context.target);
-		} catch (error) {
-			console.error("Error enabling autopost:", error);
-			return "Failed to enable autopost.";
+		if (await isAutopostChannelEnabled(context.target)) {
+			return "Autopost already enabled here.";
 		}
-	},
+
+		const { session, messages } = await fetchCurrentSessionRaceControlMessages();
+		const relevantMessageKeys = messages
+			.filter(shouldAutopostRaceControlMessage)
+			.map(buildRaceControlMessageKey);
+		await markAutopostMessagesSeen(session.Path, relevantMessageKeys);
+		await enableAutopostChannel(context.target);
+		return `Autopost enabled in ${context.target}. Watching red flags, safety car, penalties.`;
+	}),
 
 	help: async () => {
 		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !weather, !stints, !enable autopost, !help";
 	},
 };
 
-// Command aliases
 const commandAliases: Record<string, string> = {
 	n: "next",
 	w: "when",
@@ -351,11 +195,6 @@ const commandAliases: Record<string, string> = {
 	h: "help",
 };
 
-/**
- * Handle an IRC message
- * @param message - The message text
- * @param context - The IRC command context
- */
 export async function handleIrcMessage(message: string, context: CommandContext): Promise<void> {
 	console.log(`Processing command: ${message} from ${context.nick} in ${context.target}`);
 
