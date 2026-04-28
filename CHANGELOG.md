@@ -1,3 +1,10 @@
+## [1.5.8](https://github.com/obviyus/HamVerBot/compare/v1.5.7...v1.5.8) (2026-04-28)
+
+
+### Bug Fixes
+
+* normalize changelog formatting ([#89](https://github.com/obviyus/HamVerBot/issues/89)) ([5c62459](https://github.com/obviyus/HamVerBot/commit/5c6245936af1adc462955ce9569217bcf6af0c9b))
+
 ## [1.5.7](https://github.com/obviyus/HamVerBot/compare/v1.5.6...v1.5.7) (2026-04-07)
 
 ### Bug Fixes
