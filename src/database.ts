@@ -389,4 +389,3 @@ export async function storeChampionshipStandings(type: number, data: object): Pr
 		console.error("Error storing championship standings:", error);
 	}
 }
-

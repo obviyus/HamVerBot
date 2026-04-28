@@ -28,9 +28,8 @@ function parseTimezone(arg?: string): number | undefined {
 	if (!arg) return undefined;
 
 	const normalized = arg.toLowerCase();
-	const offset = normalized.startsWith("utc") || normalized.startsWith("gmt")
-		? normalized.slice(3)
-		: normalized;
+	const offset =
+		normalized.startsWith("utc") || normalized.startsWith("gmt") ? normalized.slice(3) : normalized;
 	if (offset === "") return 0;
 
 	const match = /^([+-]?)(\d{1,2})(?::(\d{1,2}))?$/.exec(offset);
@@ -77,9 +76,7 @@ async function getNextEventMessage(eventType?: EventType, timezone?: number): Pr
 	const timeLeftString = [
 		days > 0 ? `${days} day${days === 1 ? "" : "s"}` : null,
 		hours > 0 || days > 0 ? `${hours} hour${hours === 1 ? "" : "s"}` : null,
-		minutes > 0 || hours > 0 || days > 0
-			? `${minutes} minute${minutes === 1 ? "" : "s"}`
-			: null,
+		minutes > 0 || hours > 0 || days > 0 ? `${minutes} minute${minutes === 1 ? "" : "s"}` : null,
 	]
 		.filter((part): part is string => part !== null)
 		.join(" and ");
@@ -118,9 +115,13 @@ const commandHandlers: Record<string, CommandHandler> = {
 		return fetchResults(path);
 	}),
 
-	drivers: withErrorReply("Error fetching WDC standings", "Failed to fetch standings.", async () => {
-		return (await returnWdcStandings()) || "No standings available.";
-	}),
+	drivers: withErrorReply(
+		"Error fetching WDC standings",
+		"Failed to fetch standings.",
+		async () => {
+			return (await returnWdcStandings()) || "No standings available.";
+		},
+	),
 
 	constructors: withErrorReply(
 		"Error fetching WCC standings",
@@ -155,31 +156,39 @@ const commandHandlers: Record<string, CommandHandler> = {
 		return fetchSessionStints();
 	}),
 
-	enable: withErrorReply("Error enabling autopost", "Failed to enable autopost.", async (args, context) => {
-		if (args[0] !== "autopost") {
-			return "Usage: !enable autopost";
-		}
+	enable: withErrorReply(
+		"Error enabling autopost",
+		"Failed to enable autopost.",
+		async (args, context) => {
+			if (args[0] !== "autopost") {
+				return "Usage: !enable autopost";
+			}
 
-		if (context.isPrivate) {
-			return "Run this in the channel you want to enable.";
-		}
+			if (context.isPrivate) {
+				return "Run this in the channel you want to enable.";
+			}
 
-		if (!appConfig.irc.owners.some((owner) => owner.trim().toLowerCase() === context.nick.toLowerCase())) {
-			return "Only bot owners can enable autopost.";
-		}
+			if (
+				!appConfig.irc.owners.some(
+					(owner) => owner.trim().toLowerCase() === context.nick.toLowerCase(),
+				)
+			) {
+				return "Only bot owners can enable autopost.";
+			}
 
-		if (await isAutopostChannelEnabled(context.target)) {
-			return "Autopost already enabled here.";
-		}
+			if (await isAutopostChannelEnabled(context.target)) {
+				return "Autopost already enabled here.";
+			}
 
-		const { session, messages } = await fetchCurrentSessionRaceControlMessages();
-		const relevantMessageKeys = messages
-			.filter(shouldAutopostRaceControlMessage)
-			.map(buildRaceControlMessageKey);
-		await markAutopostMessagesSeen(session.Path, relevantMessageKeys);
-		await enableAutopostChannel(context.target);
-		return `Autopost enabled in ${context.target}. Watching red flags, safety car, penalties.`;
-	}),
+			const { session, messages } = await fetchCurrentSessionRaceControlMessages();
+			const relevantMessageKeys = messages
+				.filter(shouldAutopostRaceControlMessage)
+				.map(buildRaceControlMessageKey);
+			await markAutopostMessagesSeen(session.Path, relevantMessageKeys);
+			await enableAutopostChannel(context.target);
+			return `Autopost enabled in ${context.target}. Watching red flags, safety car, penalties.`;
+		},
+	),
 
 	help: async () => {
 		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !weather, !stints, !enable autopost, !help";

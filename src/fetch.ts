@@ -203,7 +203,10 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 		`),
 	);
 	const driversMap = new Map(
-		driverList.rows.map((row) => [row.racing_number as number, { tla: row.tla as string, team_name: row.team_name as string }]),
+		driverList.rows.map((row) => [
+			row.racing_number as number,
+			{ tla: row.tla as string, team_name: row.team_name as string },
+		]),
 	);
 	const standings: DriverStanding[] = [];
 	for (const driverData of Object.values(lines)) {
@@ -221,8 +224,9 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 
 		let difference: string | undefined;
 		if (driverData.Stats && Array.isArray(driverData.Stats)) {
-			difference = driverData.Stats.find((stat) => stat.TimeDifftoPositionAhead !== undefined)
-				?.TimeDifftoPositionAhead;
+			difference = driverData.Stats.find(
+				(stat) => stat.TimeDifftoPositionAhead !== undefined,
+			)?.TimeDifftoPositionAhead;
 		}
 
 		standings.push({
@@ -266,10 +270,12 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 			});
 			const eventId =
 				exact.rows[0]?.id ??
-				(await db.execute({
-					sql: "SELECT id FROM events WHERE meeting_name = ? LIMIT 1",
-					args: [meetingName],
-				})).rows[0]?.id;
+				(
+					await db.execute({
+						sql: "SELECT id FROM events WHERE meeting_name = ? LIMIT 1",
+						args: [meetingName],
+					})
+				).rows[0]?.id;
 			if (eventId) {
 				await storeEventResult(eventId as number, path, sessionResult);
 			} else {
@@ -335,11 +341,19 @@ async function fetchCurrentStandings<T extends ConstructorMRData | DriverMRData>
 }
 
 export async function fetchWccStandings(): Promise<CurrentConstructorStandings | null> {
-	return fetchCurrentStandings(1, "WCC", `${ERGAST_API_ENDPOINT}/current/constructorstandings/?format=json`);
+	return fetchCurrentStandings(
+		1,
+		"WCC",
+		`${ERGAST_API_ENDPOINT}/current/constructorstandings/?format=json`,
+	);
 }
 
 export async function fetchWdcStandings(): Promise<CurrentDriverStandings | null> {
-	return fetchCurrentStandings(0, "WDC", `${ERGAST_API_ENDPOINT}/current/driverstandings/?format=json`);
+	return fetchCurrentStandings(
+		0,
+		"WDC",
+		`${ERGAST_API_ENDPOINT}/current/driverstandings/?format=json`,
+	);
 }
 
 export async function returnWccStandings(): Promise<string | null> {

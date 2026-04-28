@@ -134,17 +134,15 @@ interface LiveTimingSnapshot {
 type LiveTimingTopic = Exclude<keyof LiveTimingSnapshot, "SessionInfo">;
 
 export function createLiveTimingConnection(): LiveTimingConnection {
-	return (
-		new signalR.HubConnectionBuilder()
-			.withUrl(F1_SIGNALR_ENDPOINT, {
-				httpClient: new BunSignalRHttpClient(),
-				transport: signalR.HttpTransportType.WebSockets,
-				withCredentials: true,
-				timeout: 10000,
-			})
-			.configureLogging(signalR.LogLevel.Error)
-			.build()
-	);
+	return new signalR.HubConnectionBuilder()
+		.withUrl(F1_SIGNALR_ENDPOINT, {
+			httpClient: new BunSignalRHttpClient(),
+			transport: signalR.HttpTransportType.WebSockets,
+			withCredentials: true,
+			timeout: 10000,
+		})
+		.configureLogging(signalR.LogLevel.Error)
+		.build();
 }
 
 function formatSessionTitle(session: CurrentSessionInfo): string {

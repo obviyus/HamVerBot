@@ -35,8 +35,12 @@ const liveTimingMocks = {
 		session: { Path: "2026/race/", Meeting: { Name: "Australian Grand Prix" }, Name: "Race" },
 		messages: [] as Array<{ id: string; shouldAutopost?: boolean }>,
 	})),
-	formatAutopostRaceControlMessage: mock((_session: unknown, message: { id: string }) => `msg:${message.id}`),
-	shouldAutopostRaceControlMessage: mock((message: { shouldAutopost?: boolean }) => !!message.shouldAutopost),
+	formatAutopostRaceControlMessage: mock(
+		(_session: unknown, message: { id: string }) => `msg:${message.id}`,
+	),
+	shouldAutopostRaceControlMessage: mock(
+		(message: { shouldAutopost?: boolean }) => !!message.shouldAutopost,
+	),
 };
 
 const cronJobs: Array<{ expression: string; started: boolean }> = [];
@@ -85,7 +89,9 @@ beforeEach(() => {
 	calendarMocks.fetchF1Calendar.mockReset();
 
 	liveTimingMocks.buildRaceControlMessageKey.mockReset();
-	liveTimingMocks.buildRaceControlMessageKey.mockImplementation((message: { id: string }) => message.id);
+	liveTimingMocks.buildRaceControlMessageKey.mockImplementation(
+		(message: { id: string }) => message.id,
+	);
 	liveTimingMocks.fetchCurrentSessionRaceControlMessages.mockReset();
 	liveTimingMocks.fetchCurrentSessionRaceControlMessages.mockResolvedValue({
 		session: { Path: "2026/race/", Meeting: { Name: "Australian Grand Prix" }, Name: "Race" },
@@ -138,9 +144,7 @@ afterEach(() => {
 describe("processJob", () => {
 	test("broadcasts new results only after delivery is confirmed", async () => {
 		fetchMocks.readCurrentEvent.mockResolvedValue({ path: "2026/race/", isComplete: true });
-		databaseMocks.isEventDelivered
-			.mockResolvedValueOnce(false)
-			.mockResolvedValueOnce(true);
+		databaseMocks.isEventDelivered.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
 		fetchMocks.fetchResults.mockResolvedValue("race results");
 
 		await processJob(JobType.Result);
