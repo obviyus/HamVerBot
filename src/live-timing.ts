@@ -12,7 +12,6 @@ interface CurrentSessionInfo {
 	};
 	Name: string;
 	Path: string;
-	SessionStatus?: string;
 }
 
 export interface RaceControlMessage {
@@ -24,10 +23,6 @@ export interface RaceControlMessage {
 	Mode?: string;
 }
 
-interface RaceControlMessagesResponse {
-	Messages: RaceControlMessage[];
-}
-
 interface LiveTimingConnection {
 	start(): Promise<void>;
 	stop(): Promise<void>;
@@ -36,10 +31,6 @@ interface LiveTimingConnection {
 
 class BunSignalRHttpClient extends signalR.HttpClient {
 	private readonly cookies = new Map<string, string>();
-
-	getCookieString(): string {
-		return [...this.cookies.values()].join("; ");
-	}
 
 	private rememberCookies(response: Response): void {
 		const rawCookies = response.headers.get("set-cookie");
@@ -78,7 +69,7 @@ class BunSignalRHttpClient extends signalR.HttpClient {
 					? AbortSignal.timeout(request.timeout)
 					: abortController.signal;
 
-		const cookieHeader = this.getCookieString();
+		const cookieHeader = [...this.cookies.values()].join("; ");
 		const response = await fetch(request.url, {
 			method: request.method,
 			body: request.content as BodyInit | null | undefined,
@@ -110,42 +101,34 @@ class BunSignalRHttpClient extends signalR.HttpClient {
 	}
 }
 
-interface WeatherData {
-	AirTemp: string;
-	Humidity: string;
-	Rainfall: string;
-	TrackTemp: string;
-	WindDirection: string;
-	WindSpeed: string;
-}
-
-interface SessionDriver {
-	RacingNumber: string;
-	Tla: string;
-}
-
-interface TimingStint {
-	Compound: string;
-	New: boolean | string;
-	TotalLaps: number | string;
-}
-
-interface TimingAppLine {
-	RacingNumber: string;
-	Line: number;
-	Stints: TimingStint[];
-}
-
-interface TimingAppDataResponse {
-	Lines: Record<string, TimingAppLine>;
-}
-
 interface LiveTimingSnapshot {
-	RaceControlMessages?: RaceControlMessagesResponse;
+	RaceControlMessages?: {
+		Messages: RaceControlMessage[];
+	};
 	SessionInfo?: CurrentSessionInfo;
-	WeatherData?: WeatherData;
-	DriverList?: Record<string, SessionDriver>;
-	TimingAppData?: TimingAppDataResponse;
+	WeatherData?: {
+		AirTemp: string;
+		Humidity: string;
+		Rainfall: string;
+		TrackTemp: string;
+		WindDirection: string;
+		WindSpeed: string;
+	};
+	DriverList?: Record<string, { RacingNumber: string; Tla: string }>;
+	TimingAppData?: {
+		Lines: Record<
+			string,
+			{
+				RacingNumber: string;
+				Line: number;
+				Stints: Array<{
+					Compound: string;
+					New: boolean | string;
+					TotalLaps: number | string;
+				}>;
+			}
+		>;
+	};
 }
 
 type LiveTimingTopic = Exclude<keyof LiveTimingSnapshot, "SessionInfo">;
@@ -153,7 +136,6 @@ type LiveTimingTopic = Exclude<keyof LiveTimingSnapshot, "SessionInfo">;
 export function createLiveTimingConnection(): LiveTimingConnection {
 	return (
 		new signalR.HubConnectionBuilder()
-			// AIDEV-NOTE: live topics come from SignalR while archive generation is in flight; completed sessions fall back to static JSON.
 			.withUrl(F1_SIGNALR_ENDPOINT, {
 				httpClient: new BunSignalRHttpClient(),
 				transport: signalR.HttpTransportType.WebSockets,
@@ -240,51 +222,32 @@ async function fetchJson<T>(url: string): Promise<T> {
 	return data;
 }
 
-async function fetchCurrentSessionInfo(): Promise<CurrentSessionInfo> {
-	return fetchJson<CurrentSessionInfo>(`${F1_STATIC_ENDPOINT}/SessionInfo.json`);
-}
-
-async function fetchSignalRSnapshot(
-	topics: Array<keyof LiveTimingSnapshot>,
-	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
-): Promise<LiveTimingSnapshot> {
-	const connection = createConnection();
-
-	try {
-		await connection.start();
-		return await connection.invoke<LiveTimingSnapshot>("Subscribe", topics);
-	} finally {
-		await connection.stop();
-	}
-}
-
-async function fetchStaticSnapshot(
-	session: CurrentSessionInfo,
-	topics: LiveTimingTopic[],
-): Promise<LiveTimingSnapshot> {
-	const entries = await Promise.all(
-		topics.map(async (topic) => {
-			const data = await fetchOptionalJson(`${F1_STATIC_ENDPOINT}/${session.Path}${topic}.json`);
-			return [topic, data] as const;
-		}),
-	);
-
-	return Object.fromEntries([
-		["SessionInfo", session],
-		...entries.filter((entry): entry is [LiveTimingTopic, unknown] => entry[1] !== undefined),
-	]) as LiveTimingSnapshot;
-}
-
 async function fetchCurrentSessionSnapshot(
 	topics: LiveTimingTopic[],
 	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
 ): Promise<LiveTimingSnapshot> {
-	const session = await fetchCurrentSessionInfo();
+	const session = await fetchJson<CurrentSessionInfo>(`${F1_STATIC_ENDPOINT}/SessionInfo.json`);
 	if (session.ArchiveStatus.Status === "Complete") {
-		return await fetchStaticSnapshot(session, topics);
+		const entries = await Promise.all(
+			topics.map(async (topic) => {
+				const data = await fetchOptionalJson(`${F1_STATIC_ENDPOINT}/${session.Path}${topic}.json`);
+				return [topic, data] as const;
+			}),
+		);
+
+		return Object.fromEntries([
+			["SessionInfo", session],
+			...entries.filter((entry): entry is [LiveTimingTopic, unknown] => entry[1] !== undefined),
+		]) as LiveTimingSnapshot;
 	}
 
-	return await fetchSignalRSnapshot(["SessionInfo", ...topics], createConnection);
+	const connection = createConnection();
+	try {
+		await connection.start();
+		return connection.invoke<LiveTimingSnapshot>("Subscribe", ["SessionInfo", ...topics]);
+	} finally {
+		await connection.stop();
+	}
 }
 
 export async function fetchCurrentSessionRaceControlMessages(

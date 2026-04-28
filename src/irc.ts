@@ -5,94 +5,6 @@ import { handleIrcMessage } from "./message";
 
 type Client = IRC.Client;
 
-// Define event types based on the documentation
-interface LoggedInEvent {
-	nick: string;
-	ident: string;
-	hostname: string;
-	account: string;
-	time: number;
-	tags: Record<string, string>;
-}
-
-interface SaslFailedEvent {
-	reason: string;
-	message?: string;
-	nick?: string;
-	time?: number;
-	tags?: Record<string, string>;
-}
-
-interface ServerOptionsEvent {
-	options: Record<string, unknown>;
-	cap: Record<string, unknown>;
-}
-
-interface JoinEvent {
-	nick: string;
-	ident: string;
-	hostname: string;
-	channel: string;
-	time: number;
-	account?: string;
-}
-
-interface PartEvent {
-	nick: string;
-	ident: string;
-	hostname: string;
-	channel: string;
-	message?: string;
-	time: number;
-}
-
-interface QuitEvent {
-	nick: string;
-	ident: string;
-	hostname: string;
-	message?: string;
-	time: number;
-}
-
-interface TopicEvent {
-	channel: string;
-	topic: string;
-	nick?: string;
-	time?: number;
-}
-
-interface CtcpRequestEvent {
-	nick: string;
-	ident: string;
-	hostname: string;
-	target: string;
-	type: string;
-	message: string;
-	time: number;
-	account?: string;
-}
-
-interface NoticeEvent {
-	from_server: boolean;
-	nick?: string;
-	ident?: string;
-	hostname?: string;
-	target: string;
-	group?: string;
-	message: string;
-	tags: Record<string, string>;
-	time: number;
-	account?: string;
-}
-
-// Type for IRC client network capabilities
-interface IrcNetwork {
-	cap: {
-		enabled: string[];
-		isEnabled: (cap: string) => boolean;
-	};
-}
-
 interface IrcClientConfig {
 	server: string;
 	port: number;
@@ -105,124 +17,58 @@ interface IrcClientConfig {
 	channels?: string[];
 }
 
-// Default IRC port if not specified
 const DEFAULT_IRC_PORT = 6667;
 const LIBERA_HOST_REGEX = /(^|\.)libera\.chat$/i;
 const IRC_MAX_LINE_BYTES = 510;
 
-// Global client instance
 let ircClient: Client | null = null;
-
-// Track authentication status
 let isAuthenticated = false;
-
-// Track whether the IRC server registration handshake completed.
 let isRegistered = false;
-
-// Store authentication callbacks
-const readyCallbacks: (() => void)[] = [];
-
-// Track whether a join callback is registered for the next ready cycle.
-let joinOnReadyRegistered = false;
-
-// Store configured channels for reconnect joins.
+let shouldJoinOnReady = false;
 let configuredChannels: string[] = [];
 
 function hasConfiguredNickPassword(nickPassword?: string): nickPassword is string {
 	return !!nickPassword && nickPassword !== "password";
 }
 
-function getSaslAccount(
-	nickname: string,
-	nickPassword?: string,
-): { account: string; password: string } | undefined {
-	if (!hasConfiguredNickPassword(nickPassword)) return undefined;
-	return { account: nickname, password: nickPassword };
-}
-
-async function resolveJoinChannels(): Promise<string[]> {
-	const dbChannels = await getAllChannels();
-	return configuredChannels.concat(dbChannels);
-}
-
-function shouldUseBunTlsIpv4Workaround(server: string, secure?: boolean): boolean {
-	// AIDEV-NOTE: Bun TLS + Libera can throw a subject-destructure error unless IPv4 is forced.
-	return typeof Bun !== "undefined" && !!secure && LIBERA_HOST_REGEX.test(server);
-}
-
-function isClientReady(): boolean {
-	return isRegistered && isAuthenticated;
-}
-
-/**
- * Register a callback to be executed after the connection is ready for joins.
- */
-export function onReady(callback: () => void): void {
-	if (isClientReady()) {
-		callback();
-		return;
-	}
-
-	readyCallbacks.push(callback);
-}
-
-/**
- * Ensure we re-join channels after registration and authentication.
- */
-function registerJoinOnReady(reason: string): void {
-	if (joinOnReadyRegistered) return;
-	joinOnReadyRegistered = true;
-
-	// AIDEV-NOTE: Re-register join-on-ready per reconnect; ready callbacks are one-shot.
-	onReady(async () => {
-		joinOnReadyRegistered = false;
-		console.log(`Connection ready (${reason}), joining channels...`);
-		const channels = await resolveJoinChannels();
-		joinChannels(channels);
-	});
-}
-
-/**
- * Execute all registered ready callbacks
- */
-function executeReadyCallbacks(): void {
-	let callback: (() => void) | undefined;
-	while ((callback = readyCallbacks.shift())) callback();
-}
-
 function maybeMarkReady(client: Client): void {
-	if (!isClientReady()) return;
+	if (!isRegistered || !isAuthenticated) return;
 
-	setBotMode(client);
-	executeReadyCallbacks();
-}
-
-function markAuthenticated(client: Client, logMessage: string): void {
-	isAuthenticated = true;
-	console.log(logMessage);
-	maybeMarkReady(client);
-}
-
-function markRegistered(client: Client, nickPassword?: string): void {
-	isRegistered = true;
-	console.log("Connected to IRC server...");
-	if (!hasConfiguredNickPassword(nickPassword)) {
-		isAuthenticated = true;
-		console.log("No authentication required, ready to join channels");
+	try {
+		client.raw(`MODE ${client.user.nick} +B`);
+		console.log(`Set bot mode (+B) for ${client.user.nick}`);
+	} catch (error) {
+		console.error("Failed to set bot mode:", error);
 	}
-	maybeMarkReady(client);
+	if (!shouldJoinOnReady) return;
+
+	shouldJoinOnReady = false;
+	void (async () => {
+		console.log("Connection ready, joining channels...");
+		for (const channel of configuredChannels.concat(await getAllChannels())) {
+			client.join(channel);
+			console.log(`Joined channel: ${channel}`);
+		}
+	})();
 }
 
 function resetConnectionState(): void {
 	isAuthenticated = false;
 	isRegistered = false;
-	joinOnReadyRegistered = false;
-	readyCallbacks.length = 0;
+	shouldJoinOnReady = false;
 }
 
-function connectClient(client: Client, config: IrcClientConfig): void {
-	const useBunTlsIpv4Workaround = shouldUseBunTlsIpv4Workaround(config.server, config.secure);
+function createAndConnectClient(config: IrcClientConfig): Client {
+	resetConnectionState();
+	const client = new IRC.Client();
+	ircClient = client;
+	configuredChannels = config.channels || [];
 
+	initEventListeners(client, config.nickname, config.nickPassword);
+	shouldJoinOnReady = true;
+
+	const useBunTlsIpv4Workaround =
+		typeof Bun !== "undefined" && !!config.secure && LIBERA_HOST_REGEX.test(config.server);
 	console.log("IRC Configuration:");
 	console.log(`  Server: ${config.server}:${config.port}`);
 	console.log(`  Nickname: ${config.nickname}`);
@@ -245,29 +91,15 @@ function connectClient(client: Client, config: IrcClientConfig): void {
 		auto_reconnect: true,
 		auto_reconnect_max_retries: 30,
 		auto_reconnect_max_wait: 30000,
-		account: getSaslAccount(config.nickname, config.nickPassword),
+		account: hasConfiguredNickPassword(config.nickPassword)
+			? { account: config.nickname, password: config.nickPassword }
+			: undefined,
 		...(useBunTlsIpv4Workaround ? { outgoing_addr: "0.0.0.0" } : {}),
 	});
-}
-
-function createAndConnectClient(config: IrcClientConfig, joinReason: string): Client {
-	resetConnectionState();
-	const client = new IRC.Client();
-	ircClient = client;
-	configuredChannels = config.channels || [];
-
-	initEventListeners(client, config.nickname, config.nickPassword);
-	registerJoinOnReady(joinReason);
-	connectClient(client, config);
 
 	return client;
 }
 
-/**
- * Get the IRC client instance
- * @returns The IRC client instance
- * @throws Error if the client is not initialized
- */
 export function getClient(): Client {
 	if (!ircClient) {
 		throw new Error("IRC client not initialized. Call initIrcClient first.");
@@ -275,128 +107,53 @@ export function getClient(): Client {
 	return ircClient;
 }
 
-/**
- * Check if the IRC client is initialized and connected
- * @returns True if the client is initialized and connected, false otherwise
- */
-export function isClientConnected(): boolean {
-	return !!ircClient && ircClient.connected;
-}
-
-/**
- * Check if the client is authenticated with NickServ
- * @returns True if authenticated, false otherwise
- */
 export function isClientAuthenticated(): boolean {
 	return isAuthenticated;
 }
 
-function sendWithLogging(target: string, message: string, privateMessage = false): void {
+function sendWithLogging(target: string, message: string): void {
 	const client = getClient();
-	const normalizedMessage = normalizeOutgoingMessage(target, message);
-	try {
-		client.say(target, normalizedMessage);
-		if (privateMessage) {
-			console.log(`Private message sent to ${target}`);
-		} else {
-			console.log(`Message sent to ${target}: ${normalizedMessage}`);
+	const sanitized = message.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+	const maxBytes = IRC_MAX_LINE_BYTES - Buffer.byteLength(`PRIVMSG ${target} :`);
+	let normalizedMessage = sanitized;
+	if (Buffer.byteLength(sanitized) > maxBytes) {
+		const ellipsis = "...";
+		const maxContentBytes = Math.max(0, maxBytes - Buffer.byteLength(ellipsis));
+		for (const pattern of [/ \| /g, / \d+\.\s/g, / /g]) {
+			let bestIndex = -1;
+			for (const match of sanitized.matchAll(pattern)) {
+				const index = match.index ?? -1;
+				if (index <= 0) continue;
+				if (Buffer.byteLength(sanitized.slice(0, index).trimEnd()) > maxContentBytes) continue;
+				bestIndex = index;
+			}
+			if (bestIndex > 0) {
+				normalizedMessage = `${sanitized.slice(0, bestIndex).trimEnd()}${ellipsis}`;
+				break;
+			}
 		}
-	} catch (error) {
-		if (privateMessage) {
-			console.error(`Error sending private message to ${target}:`, error);
-		} else {
-			console.error(`Error sending message to ${target}:`, error);
+
+		if (normalizedMessage === sanitized) {
+			let truncated = "";
+			for (const char of sanitized) {
+				if (Buffer.byteLength(truncated) + Buffer.byteLength(char) > maxContentBytes) break;
+				truncated += char;
+			}
+			normalizedMessage = `${truncated.trimEnd()}${ellipsis}`;
 		}
 	}
-}
-
-function normalizeWhitespace(message: string): string {
-	return message.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function getMaxPrivmsgBytes(target: string): number {
-	return IRC_MAX_LINE_BYTES - Buffer.byteLength(`PRIVMSG ${target} :`);
-}
-
-function truncateToBytes(message: string, maxBytes: number): string {
-	if (Buffer.byteLength(message) <= maxBytes) return message;
-
-	const ellipsis = "...";
-	const maxContentBytes = Math.max(0, maxBytes - Buffer.byteLength(ellipsis));
-	const boundaryIndex = findPreferredBoundaryIndex(message, maxContentBytes);
-	if (boundaryIndex > 0) {
-		return `${message.slice(0, boundaryIndex).trimEnd()}${ellipsis}`;
-	}
-
-	let truncated = "";
-	for (const char of message) {
-		if (Buffer.byteLength(truncated) + Buffer.byteLength(char) > maxContentBytes) break;
-		truncated += char;
-	}
-
-	return `${truncated.trimEnd()}${ellipsis}`;
-}
-
-function findPreferredBoundaryIndex(message: string, maxBytes: number): number {
-	const structuredBoundaryIndex = findLastMatchingIndex(message, maxBytes, [
-		...findSeparatorIndexes(message, " | "),
-		...findNumberedItemIndexes(message),
-	]);
-	if (structuredBoundaryIndex > 0) return structuredBoundaryIndex;
-
-	return findLastMatchingIndex(message, maxBytes, findWhitespaceIndexes(message));
-}
-
-function findLastMatchingIndex(message: string, maxBytes: number, indexes: number[]): number {
-	let bestIndex = -1;
-
-	for (const index of indexes) {
-		if (index <= 0) continue;
-		if (Buffer.byteLength(message.slice(0, index).trimEnd()) > maxBytes) continue;
-		if (index > bestIndex) bestIndex = index;
-	}
-
-	return bestIndex;
-}
-
-function findSeparatorIndexes(message: string, separator: string): number[] {
-	const indexes: number[] = [];
-	let searchFrom = 0;
-
-	while (searchFrom < message.length) {
-		const index = message.indexOf(separator, searchFrom);
-		if (index === -1) break;
-		indexes.push(index);
-		searchFrom = index + separator.length;
-	}
-
-	return indexes;
-}
-
-function findNumberedItemIndexes(message: string): number[] {
-	return Array.from(message.matchAll(/ \d+\.\s/g), (match) => match.index ?? -1);
-}
-
-function findWhitespaceIndexes(message: string): number[] {
-	return Array.from(message.matchAll(/ /g), (match) => match.index ?? -1);
-}
-
-function normalizeOutgoingMessage(target: string, message: string): string {
-	const sanitized = normalizeWhitespace(message);
-	const maxBytes = getMaxPrivmsgBytes(target);
-	const normalized = truncateToBytes(sanitized, maxBytes);
-
-	if (normalized !== sanitized) {
+	if (normalizedMessage !== sanitized) {
 		console.warn(`Truncated outbound IRC message for ${target} to ${maxBytes} bytes`);
 	}
 
-	return normalized;
+	try {
+		client.say(target, normalizedMessage);
+		console.log(`Message sent to ${target}: ${normalizedMessage}`);
+	} catch (error) {
+		console.error(`Error sending message to ${target}:`, error);
+	}
 }
 
-/**
- * Broadcast a message to all registered channels
- * @param message - The message to broadcast
- */
 export async function broadcast(message: string): Promise<void> {
 	const channels = await getAllChannels();
 
@@ -405,37 +162,19 @@ export async function broadcast(message: string): Promise<void> {
 	}
 }
 
-/**
- * Initialize the IRC client with the given configuration
- * @param config - The IRC client configuration
- * @returns The initialized IRC client
- */
 export async function initIrcClient(config: IrcClientConfig): Promise<Client> {
-	return createAndConnectClient(config, "initial connect");
+	return createAndConnectClient(config);
 }
 
-function dispatchCommand(
-	message: string,
-	target: string,
-	nick: string,
-	commandContext: string,
-	isPrivate: boolean,
-): void {
+function dispatchCommand(message: string, target: string, nick: string, isPrivate: boolean): void {
 	if (!message.startsWith(appConfig.irc.commandPrefix)) return;
 	const commandText = message.slice(appConfig.irc.commandPrefix.length);
 	void handleIrcMessage(commandText, { target, nick, isPrivate }).catch((error) => {
-		console.error(`Error handling ${commandContext} command:`, error);
+		console.error("Error handling command:", error);
 	});
 }
 
-/**
- * Initialize event listeners for the IRC client
- * @param client - The IRC client
- * @param nickname - The bot's nickname
- * @param nickPassword - The NickServ password (optional)
- */
 function initEventListeners(client: Client, nickname: string, nickPassword?: string): void {
-	// Bun >=1.1.27 can emit idle timeouts even with active traffic; disable the raw socket timeout.
 	client.on("socket connected", () => {
 		const transport = (
 			client as unknown as {
@@ -453,12 +192,9 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		}
 	});
 
-	// Handle successful registration with the server
 	client.on("registered", () => {
-		// If SASL is not being used, fall back to NickServ authentication
 		if (hasConfiguredNickPassword(nickPassword)) {
-			// Check if SASL capability is enabled - if not, use NickServ
-			const clientWithNetwork = client as Client & { network?: IrcNetwork };
+			const clientWithNetwork = client as Client & { network?: { cap?: { enabled?: string[] } } };
 			const caps = clientWithNetwork.network?.cap?.enabled || [];
 			if (!caps.includes("sasl")) {
 				isRegistered = true;
@@ -468,51 +204,47 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 			}
 		}
 
-		markRegistered(client, nickPassword);
+		isRegistered = true;
+		console.log("Connected to IRC server...");
+		if (!hasConfiguredNickPassword(nickPassword)) {
+			isAuthenticated = true;
+			console.log("No authentication required, ready to join channels");
+		}
+		maybeMarkReady(client);
 	});
 
-	// Handle SASL login events
 	client.on("loggedin", (event: unknown) => {
-		const loggedInEvent = event as LoggedInEvent;
-		markAuthenticated(client, `Successfully authenticated with SASL as ${loggedInEvent.account}`);
+		isAuthenticated = true;
+		console.log(`Successfully authenticated with SASL as ${(event as { account: string }).account}`);
+		maybeMarkReady(client);
 	});
 
-	// Handle SASL failure
 	client.on("sasl failed", (event: unknown) => {
-		const saslFailedEvent = event as SaslFailedEvent;
-		console.error(`SASL authentication failed: ${saslFailedEvent.reason}`);
-
-		// Fall back to NickServ if SASL fails and we have a password
+		console.error(`SASL authentication failed: ${(event as { reason: string }).reason}`);
 		if (hasConfiguredNickPassword(nickPassword)) {
 			console.log("Falling back to NickServ authentication");
 			authenticateWithNickServ(nickname, nickPassword);
 		}
 	});
 
-	// Handle nickname already in use
 	client.on("nick in use", () => {
 		const altNick = `${nickname}_`;
 		console.log(`Nickname ${nickname} in use, trying ${altNick}`);
 		client.changeNick(altNick);
 	});
 
-	// Handle errors
 	client.on("error", (error: unknown) => {
 		console.error("IRC client error:", error);
 	});
 
-	// Handle connection close
 	client.on("close", () => {
 		console.log("Connection closed. Attempting to reconnect...");
 		resetConnectionState();
 	});
 
-	// Handle socket errors
 	client.on("socket close", (err: unknown) => {
 		const error = err as { message?: string; code?: string; errno?: number } | undefined;
 		console.log("Socket closed:", error?.message || "No error");
-
-		// Log additional details if available
 		if (error) {
 			if (error.code) console.log("Socket close code:", error.code);
 			if (error.errno) console.log("Socket close errno:", error.errno);
@@ -520,58 +252,44 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		}
 
 		resetConnectionState();
-
-		// Log connection status
 		console.log(
 			"Connection status after socket close:",
 			client.connected ? "Still connected" : "Disconnected",
 		);
 		console.log("Auto reconnect is enabled, will attempt to reconnect shortly...");
-
 	});
 
-	// Handle reconnections
 	client.on("reconnecting", (opts: unknown) => {
 		const options = opts as { wait: number };
 		console.log(`Reconnecting to IRC server in ${options.wait / 1000} seconds...`);
-		registerJoinOnReady("reconnect");
+		shouldJoinOnReady = true;
 	});
 
-	// Handle successful reconnection
-	client.on("connected", async () => {
+	client.on("connected", () => {
 		console.log("Successfully reconnected to IRC server");
 	});
 
-	// Handle ping timeouts
 	client.on("ping timeout", () => {
 		console.warn("Ping timeout detected. Connection may be unstable.");
 	});
 
-	// Handle server options
 	client.on("server options", (options: unknown) => {
-		const serverOptions = options as ServerOptionsEvent;
-		console.log("Server options received:", JSON.stringify(serverOptions));
+		console.log("Server options received:", JSON.stringify(options));
 	});
 
-	// Handle messages
 	client.on("message", (event) => {
-		// Special handling for NickServ messages to help debug authentication
 		if (event.nick === "NickServ") {
 			console.log(`[NickServ] ${event.message}`);
-
-			// Check for successful authentication
 			if (
 				event.message.includes("You are now identified") ||
 				event.message.includes("You are already logged in")
 			) {
-				markAuthenticated(client, "Successfully authenticated with NickServ");
-			}
-			// Handle NickServ authentication failures
-			else if (event.message.includes("Invalid password")) {
+				isAuthenticated = true;
+				console.log("Successfully authenticated with NickServ");
+				maybeMarkReady(client);
+			} else if (event.message.includes("Invalid password")) {
 				console.error("NickServ authentication failed: Invalid password");
 				console.error("Please check your IRC_NICK_PASSWORD environment variable");
-
-				// Generate a random nickname as fallback
 				const altNick = `${nickname}_${Math.floor(Math.random() * 1000)}`;
 				console.log(`Switching to alternative nickname: ${altNick}`);
 				client.changeNick(altNick);
@@ -583,21 +301,18 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 			console.log(`[${event.target}] ${event.nick}: ${event.message}`);
 		}
 
-		// Handle commands
-		dispatchCommand(event.message, event.target, event.nick, "channel", false);
+		dispatchCommand(event.message, event.target, event.nick, false);
 	});
 
-	// Handle private messages
 	client.on("privmsg", (event) => {
 		if (event.target === nickname) {
 			console.log(`[PM] ${event.nick}: ${event.message}`);
-			dispatchCommand(event.message, event.nick, event.nick, "private", true);
+			dispatchCommand(event.message, event.nick, event.nick, true);
 		}
 	});
 
-	// Handle notices
 	client.on("notice", (event: unknown) => {
-		const noticeEvent = event as NoticeEvent;
+		const noticeEvent = event as { from_server: boolean; nick?: string; message: string };
 		if (noticeEvent.from_server) {
 			console.log(`[Server Notice] ${noticeEvent.message}`);
 		} else {
@@ -605,122 +320,43 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		}
 	});
 
-	// Handle channel joins
 	client.on("join", (event: unknown) => {
-		const joinEvent = event as JoinEvent;
+		const joinEvent = event as { nick: string; channel: string };
 		console.log(`${joinEvent.nick} joined ${joinEvent.channel}`);
 	});
 
-	// Handle channel parts
 	client.on("part", (event: unknown) => {
-		const partEvent = event as PartEvent;
-		console.log(
-			`${partEvent.nick} left ${partEvent.channel}: ${partEvent.message || "No message"}`,
-		);
+		const partEvent = event as { nick: string; channel: string; message?: string };
+		console.log(`${partEvent.nick} left ${partEvent.channel}: ${partEvent.message || "No message"}`);
 	});
 
-	// Handle user quits
 	client.on("quit", (event: unknown) => {
-		const quitEvent = event as QuitEvent;
+		const quitEvent = event as { nick: string; message?: string };
 		console.log(`${quitEvent.nick} quit: ${quitEvent.message || "No message"}`);
 	});
 
-	// Handle topic changes
 	client.on("topic", (event: unknown) => {
-		const topicEvent = event as TopicEvent;
+		const topicEvent = event as { channel: string; topic: string };
 		console.log(`Topic for ${topicEvent.channel}: ${topicEvent.topic}`);
 	});
 
-	// Handle CTCP requests
 	client.on("ctcp request", (event: unknown) => {
-		const ctcpEvent = event as CtcpRequestEvent;
+		const ctcpEvent = event as { nick: string; type: string; message: string };
 		console.log(`CTCP ${ctcpEvent.type} request from ${ctcpEvent.nick}: ${ctcpEvent.message}`);
 	});
 }
 
-/**
- * Authenticate with NickServ
- * @param nickname - The bot's nickname
- * @param password - The NickServ password
- */
 function authenticateWithNickServ(nickname: string, password: string): void {
 	const client = getClient();
-
-	// Log authentication attempt (without showing the actual password)
 	console.log(`Attempting to authenticate with NickServ for nickname: ${nickname}`);
-
-	// The correct format is: IDENTIFY <password>
-	// NickServ expects just the password, not the nickname and password
 	client.say("NickServ", `IDENTIFY ${password}`);
-
 	console.log("Sent authentication to NickServ");
 }
 
-/**
- * Join a channel
- * @param channel - The channel to join
- */
-export function joinChannel(channel: string): void {
-	const client = getClient();
-	client.join(channel);
-	console.log(`Joined channel: ${channel}`);
-}
-
-/**
- * Join multiple channels
- * @param channels - The channels to join
- */
-export function joinChannels(channels: string[]): void {
-	for (const channel of channels) {
-		joinChannel(channel);
-	}
-}
-
-/**
- * Leave a channel
- * @param channel - The channel to leave
- */
-export function leaveChannel(channel: string): void {
-	const client = getClient();
-	client.part(channel);
-	console.log(`Left channel: ${channel}`);
-}
-
-/**
- * Send a message to a specific channel
- * @param channel - The channel to send the message to
- * @param message - The message to send
- */
 export function sendMessage(channel: string, message: string): void {
 	sendWithLogging(channel, message);
 }
 
-/**
- * Send a private message to a user
- * @param nickname - The nickname to send the message to
- * @param message - The message to send
- */
-export function sendPrivateMessage(nickname: string, message: string): void {
-	sendWithLogging(nickname, message, true);
-}
-
-/**
- * Disconnect from the IRC server
- * @param message - Optional quit message
- */
-export function disconnect(message?: string): void {
-	const client = getClient();
-	client.quit(message || "Disconnecting");
-	ircClient = null;
-	resetConnectionState();
-	console.log("Disconnected from IRC server");
-}
-
-/**
- * Manually attempt to reconnect to the IRC server
- * This is a fallback for when the auto-reconnect doesn't work
- * @returns Promise that resolves when reconnection is attempted
- */
 export async function attemptManualReconnect(): Promise<boolean> {
 	console.log("Attempting manual reconnection to IRC server...");
 
@@ -730,26 +366,23 @@ export async function attemptManualReconnect(): Promise<boolean> {
 	}
 
 	try {
-		// If we're already connected, no need to reconnect
 		if (ircClient.connected) {
 			console.log("Already connected, no need to reconnect");
 			return true;
 		}
 
-		createAndConnectClient(
-			{
-				server: appConfig.irc.server,
-				port: appConfig.irc.port,
-				nickname: appConfig.irc.nickname,
-				username: appConfig.irc.nickname,
-				realname: appConfig.irc.realname,
-				password: appConfig.irc.password,
-				nickPassword: appConfig.irc.nickPassword,
-				secure: appConfig.irc.useTls,
-				channels: appConfig.irc.channels,
-			},
-			"manual reconnect",
-		);
+		const { irc } = appConfig;
+		createAndConnectClient({
+			server: irc.server,
+			port: irc.port,
+			nickname: irc.nickname,
+			username: irc.nickname,
+			realname: irc.realname,
+			password: irc.password,
+			nickPassword: irc.nickPassword,
+			secure: irc.useTls,
+			channels: irc.channels,
+		});
 
 		console.log("Manual reconnection initiated");
 		return true;
@@ -759,15 +392,3 @@ export async function attemptManualReconnect(): Promise<boolean> {
 	}
 }
 
-/**
- * Set the bot mode (+B) for the client
- * @param client - The IRC client
- */
-function setBotMode(client: Client): void {
-	try {
-		client.raw(`MODE ${client.user.nick} +B`);
-		console.log(`Set bot mode (+B) for ${client.user.nick}`);
-	} catch (error) {
-		console.error("Failed to set bot mode:", error);
-	}
-}

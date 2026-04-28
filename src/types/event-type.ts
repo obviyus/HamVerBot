@@ -1,6 +1,3 @@
-/**
- * Event types for F1 sessions
- */
 export enum EventType {
 	LiveryReveal = 1,
 	FreePractice1 = 2,

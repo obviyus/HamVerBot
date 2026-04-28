@@ -8,10 +8,13 @@ import { scheduleJobs } from "~/worker";
 type ExitFn = typeof process.exit;
 type OnFn = typeof process.on;
 
-export async function start(): Promise<void> {
-	const nickname = appConfig.irc.nickname;
+const defaultExit: ExitFn = (code) => process.exit(code);
+const defaultOn: OnFn = (...args) => process.on(...args);
 
-	if (appConfig.irc.nickPassword === "password") {
+export async function start(): Promise<void> {
+	const { irc } = appConfig;
+
+	if (irc.nickPassword === "password") {
 		console.warn(
 			"WARNING: Using default NickServ password. Set IRC_NICK_PASSWORD in your .env file.",
 		);
@@ -31,39 +34,38 @@ export async function start(): Promise<void> {
 	scheduleJobs();
 	console.log("Scheduled all cron jobs");
 
-	console.log(`Bot nickname: ${appConfig.irc.nickname}`);
-	console.log(`Connecting to ${appConfig.irc.server}:${appConfig.irc.port}`);
+	console.log(`Bot nickname: ${irc.nickname}`);
+	console.log(`Connecting to ${irc.server}:${irc.port}`);
 
 	await initIrcClient({
-		server: appConfig.irc.server,
-		port: appConfig.irc.port,
-		nickname: appConfig.irc.nickname,
-		username: appConfig.irc.nickname,
-		realname: appConfig.irc.realname,
-		password: appConfig.irc.password,
-		nickPassword: appConfig.irc.nickPassword,
-		secure: appConfig.irc.useTls,
-		channels: appConfig.irc.channels,
+		server: irc.server,
+		port: irc.port,
+		nickname: irc.nickname,
+		username: irc.nickname,
+		realname: irc.realname,
+		password: irc.password,
+		nickPassword: irc.nickPassword,
+		secure: irc.useTls,
+		channels: irc.channels,
 	});
 
-	console.log(`${nickname} started successfully...`);
+	console.log(`${irc.nickname} started successfully...`);
 }
 
 export function registerSignalHandlers(
-	on: OnFn = process.on.bind(process),
-	exit: ExitFn = process.exit,
+	on: OnFn = defaultOn,
+	exit: ExitFn = defaultExit,
 ): void {
 	on("SIGINT", () => {
 		console.log("Received SIGINT. Shutting down...");
-		const client = getClient();
-		client.quit("Grazzi ragazzi!");
+		getClient().quit("Grazzi ragazzi!");
 		exit(0);
 	});
 }
 
 export async function main(
-	exit: ExitFn = process.exit,
-	on: OnFn = process.on.bind(process),
+	exit: ExitFn = defaultExit,
+	on: OnFn = defaultOn,
 ): Promise<void> {
 	try {
 		await start();
