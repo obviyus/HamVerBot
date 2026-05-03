@@ -138,6 +138,7 @@ export function createLiveTimingConnection(): LiveTimingConnection {
 		.withUrl(F1_SIGNALR_ENDPOINT, {
 			httpClient: new BunSignalRHttpClient(),
 			transport: signalR.HttpTransportType.WebSockets,
+			skipNegotiation: true,
 			withCredentials: true,
 			timeout: 10000,
 		})
@@ -242,7 +243,7 @@ async function fetchCurrentSessionSnapshot(
 	const connection = createConnection();
 	try {
 		await connection.start();
-		return connection.invoke<LiveTimingSnapshot>("Subscribe", ["SessionInfo", ...topics]);
+		return await connection.invoke<LiveTimingSnapshot>("Subscribe", ["SessionInfo", ...topics]);
 	} finally {
 		await connection.stop();
 	}

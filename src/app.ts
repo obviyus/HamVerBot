@@ -2,7 +2,7 @@ import { fetchF1Calendar } from "~/calendar";
 import { config as appConfig } from "~/config";
 import { getLatestPath } from "~/database";
 import { fetchDriverList, fetchResults } from "~/fetch";
-import { getClient, initIrcClient } from "~/irc";
+import { getClient, initIrcClient, waitForIrcReady } from "~/irc";
 import { scheduleJobs } from "~/worker";
 
 type ExitFn = typeof process.exit;
@@ -31,9 +31,6 @@ export async function start(): Promise<void> {
 		await fetchResults(latestPath);
 	}
 
-	scheduleJobs();
-	console.log("Scheduled all cron jobs");
-
 	console.log(`Bot nickname: ${irc.nickname}`);
 	console.log(`Connecting to ${irc.server}:${irc.port}`);
 
@@ -48,6 +45,10 @@ export async function start(): Promise<void> {
 		secure: irc.useTls,
 		channels: irc.channels,
 	});
+	await waitForIrcReady();
+
+	scheduleJobs();
+	console.log("Scheduled all cron jobs");
 
 	console.log(`${irc.nickname} started successfully...`);
 }

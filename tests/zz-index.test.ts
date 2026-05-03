@@ -6,6 +6,7 @@ const getLatestPathMock = mock(async () => null as string | null);
 const fetchDriverListMock = mock(async (_path: string) => {});
 const fetchResultsMock = mock(async (_path: string) => {});
 const initIrcClientMock = mock(async (_config: unknown) => ({}));
+const waitForIrcReadyMock = mock(async () => {});
 const quitMock = mock((_message?: string) => {});
 const getClientMock = mock(() => ({ quit: quitMock }));
 
@@ -42,6 +43,7 @@ async function loadAppModule() {
 	void mock.module("~/irc", () => ({
 		getClient: getClientMock,
 		initIrcClient: initIrcClientMock,
+		waitForIrcReady: waitForIrcReadyMock,
 	}));
 	void mock.module("~/config", () => ({
 		config: appConfig,
@@ -58,6 +60,7 @@ beforeEach(() => {
 	fetchDriverListMock.mockReset();
 	fetchResultsMock.mockReset();
 	initIrcClientMock.mockReset();
+	waitForIrcReadyMock.mockReset();
 	quitMock.mockReset();
 	getClientMock.mockReset();
 	getClientMock.mockReturnValue({ quit: quitMock });
@@ -88,13 +91,24 @@ describe("index startup", () => {
 			calls.push("irc");
 			return {};
 		});
+		waitForIrcReadyMock.mockImplementation(async () => {
+			calls.push("ready");
+		});
 
 		const { start } = await loadAppModule();
 		calls.length = 0;
 
 		await start();
 
-		expect(calls).toEqual(["calendar", "latestPath", "driverList", "results", "schedule", "irc"]);
+		expect(calls).toEqual([
+			"calendar",
+			"latestPath",
+			"driverList",
+			"results",
+			"irc",
+			"ready",
+			"schedule",
+		]);
 		expect(initIrcClientMock).toHaveBeenCalledWith({
 			server: "irc.libera.chat",
 			port: 6697,
@@ -118,6 +132,7 @@ describe("index startup", () => {
 		expect(fetchResultsMock).not.toHaveBeenCalled();
 		expect(scheduleJobsMock).toHaveBeenCalled();
 		expect(initIrcClientMock).toHaveBeenCalled();
+		expect(waitForIrcReadyMock).toHaveBeenCalled();
 	});
 
 	test("registerSignalHandlers wires SIGINT shutdown", async () => {

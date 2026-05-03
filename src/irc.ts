@@ -24,8 +24,10 @@ const IRC_MAX_LINE_BYTES = 510;
 let ircClient: Client | null = null;
 let isAuthenticated = false;
 let isRegistered = false;
+let isReady = false;
 let shouldJoinOnReady = false;
 let configuredChannels: string[] = [];
+let readyWaiters: Array<() => void> = [];
 
 function hasConfiguredNickPassword(nickPassword?: string): nickPassword is string {
 	return !!nickPassword && nickPassword !== "password";
@@ -49,12 +51,16 @@ function maybeMarkReady(client: Client): void {
 			client.join(channel);
 			console.log(`Joined channel: ${channel}`);
 		}
+		isReady = true;
+		for (const resolve of readyWaiters) resolve();
+		readyWaiters = [];
 	})();
 }
 
 function resetConnectionState(): void {
 	isAuthenticated = false;
 	isRegistered = false;
+	isReady = false;
 	shouldJoinOnReady = false;
 }
 
@@ -109,6 +115,14 @@ export function getClient(): Client {
 
 export function isClientAuthenticated(): boolean {
 	return isAuthenticated;
+}
+
+export function waitForIrcReady(): Promise<void> {
+	if (isReady) return Promise.resolve();
+
+	return new Promise((resolve) => {
+		readyWaiters.push(resolve);
+	});
 }
 
 function sendWithLogging(target: string, message: string): void {

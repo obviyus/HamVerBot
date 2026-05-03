@@ -331,6 +331,43 @@ describe("live timing fetchers", () => {
 		expect(stopMock).toHaveBeenCalledTimes(1);
 	});
 
+	test("keeps live timing connection open until subscribe resolves", async () => {
+		mockCurrentSessionFetch(currentSessionInfo());
+
+		let stopped = false;
+		const stopMock = mock(async () => {
+			stopped = true;
+		});
+		const invokeMock = mock(
+			() =>
+				new Promise<Record<string, unknown>>((resolve, reject) => {
+					setTimeout(() => {
+						if (stopped) {
+							reject(new Error("connection stopped before subscribe resolved"));
+							return;
+						}
+
+						resolve({
+							RaceControlMessages: { Messages: [] },
+							SessionInfo: currentSessionInfo(),
+						});
+					}, 0);
+				}),
+		);
+
+		expect(
+			fetchCurrentSessionRaceControlMessages(() => ({
+				start: mock(async () => {}),
+				stop: stopMock,
+				invoke: invokeMock,
+			})),
+		).resolves.toEqual({
+			session: currentSessionInfo(),
+			messages: [],
+		});
+		expect(stopMock).toHaveBeenCalledTimes(1);
+	});
+
 	test("stops live timing connection when subscribe fails", async () => {
 		mockCurrentSessionFetch(currentSessionInfo());
 

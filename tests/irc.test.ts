@@ -81,6 +81,7 @@ const {
 	initIrcClient,
 	isClientAuthenticated,
 	sendMessage,
+	waitForIrcReady,
 } = await import("../src/irc.ts");
 
 beforeEach(() => {
@@ -228,6 +229,33 @@ describe("IRC client", () => {
 		expect(client.rawCalls).toContain("MODE HamVerBot +B");
 		expect(client.joinCalls).toEqual(["#f1", "#db"]);
 		expect(client.sayCalls).toEqual([]);
+	});
+
+	test("resolves readiness after channels are joined", async () => {
+		getAllChannelsMock.mockResolvedValue(["#db"]);
+
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			secure: true,
+			channels: ["#f1"],
+		});
+
+		let ready = false;
+		void waitForIrcReady().then(() => {
+			ready = true;
+		});
+		await Promise.resolve();
+		expect(ready).toBe(false);
+
+		const client = getClient() as unknown as FakeClient;
+		client.emit("registered");
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(client.joinCalls).toEqual(["#f1", "#db"]);
+		expect(ready).toBe(true);
 	});
 
 	test("waits for registered before joining after SASL login", async () => {
