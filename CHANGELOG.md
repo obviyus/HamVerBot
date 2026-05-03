@@ -1,3 +1,10 @@
+## [1.5.9](https://github.com/obviyus/HamVerBot/compare/v1.5.8...v1.5.9) (2026-05-03)
+
+
+### Bug Fixes
+
+* **autopost:** wait for irc before race alerts ([adc60dd](https://github.com/obviyus/HamVerBot/commit/adc60ddd8eeb1af1a8b083ecf9e02231dbbf8798))
+
 ## [1.5.8](https://github.com/obviyus/HamVerBot/compare/v1.5.7...v1.5.8) (2026-04-28)
 
 
