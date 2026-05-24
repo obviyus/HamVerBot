@@ -1,3 +1,10 @@
+## [1.5.11](https://github.com/obviyus/HamVerBot/compare/v1.5.10...v1.5.11) (2026-05-24)
+
+
+### Bug Fixes
+
+* **deploy:** set watchtower docker api version ([3df2785](https://github.com/obviyus/HamVerBot/commit/3df27859aa719e877a9ebd2ce13f3058e9d5b790))
+
 ## [1.5.10](https://github.com/obviyus/HamVerBot/compare/v1.5.9...v1.5.10) (2026-05-24)
 
 
