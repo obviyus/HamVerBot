@@ -1,3 +1,10 @@
+## [1.5.10](https://github.com/obviyus/HamVerBot/compare/v1.5.9...v1.5.10) (2026-05-24)
+
+
+### Bug Fixes
+
+* **live-timing:** add OpenF1 fallback for blocked F1 static ([9f411d9](https://github.com/obviyus/HamVerBot/commit/9f411d98cc1b84d62959c3945c1fb059fe68fe9d))
+
 ## [1.5.9](https://github.com/obviyus/HamVerBot/compare/v1.5.8...v1.5.9) (2026-05-03)
 
 
