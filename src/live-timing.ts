@@ -1,4 +1,15 @@
 import * as signalR from "@microsoft/signalr";
+import {
+	fetchLiveTimingJson,
+	fetchOpenF1RaceControlMessages,
+	fetchOpenF1Stints,
+	fetchOpenF1Weather,
+	fetchOptionalLiveTimingJson,
+	isLiveTimingAccessDenied,
+	openF1SessionPath,
+	type OpenF1RaceControlMessage,
+	type OpenF1Session,
+} from "./openf1";
 
 const F1_STATIC_ENDPOINT = "https://livetiming.formula1.com/static";
 const F1_SIGNALR_ENDPOINT = "https://livetiming.formula1.com/signalrcore";
@@ -195,57 +206,157 @@ export function formatAutopostRaceControlMessage(
 	return `⚖️ \x02${title}\x02: ${message.Message}`;
 }
 
-async function fetchOptionalJson<T>(url: string): Promise<T | undefined> {
-	const response = await fetch(url, {
-		signal: AbortSignal.timeout(10000),
-	});
-
-	if (response.status === 403) {
-		return undefined;
-	}
-
-	if (!response.ok) {
-		throw new Error(`HTTP error! Status: ${response.status} for URL: ${url}`);
-	}
-
-	const text = (await response.text()).trim().replace(/^\uFEFF/, "");
-	return JSON.parse(text) as T;
+function openF1SessionInfo(session: OpenF1Session): CurrentSessionInfo {
+	return {
+		Meeting: {
+			Name: `${session.location} Grand Prix`,
+		},
+		ArchiveStatus: {
+			Status: Date.parse(session.date_end) <= Date.now() ? "Complete" : "Generating",
+		},
+		Name: session.session_name,
+		Path: openF1SessionPath(session.session_key),
+	};
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-	const data = await fetchOptionalJson<T>(url);
-	if (data === undefined) {
-		throw new Error(`HTTP error! Status: 403 for URL: ${url}`);
+function openF1RaceControlStatus(message: OpenF1RaceControlMessage): {
+	status?: string;
+	mode?: string;
+} {
+	if (message.category !== "SafetyCar") return {};
+
+	const normalizedMessage = message.message.toUpperCase();
+	return {
+		status: normalizedMessage.includes("DEPLOYED") ? "DEPLOYED" : undefined,
+		mode: normalizedMessage.includes("VSC") || normalizedMessage.includes("VIRTUAL") ? "VSC" : "SC",
+	};
+}
+
+function openF1RaceControlMessage(message: OpenF1RaceControlMessage): RaceControlMessage {
+	const { status, mode } = openF1RaceControlStatus(message);
+	return {
+		Utc: message.date,
+		Category: message.category,
+		Message: message.message,
+		Flag: message.flag ?? undefined,
+		Status: status,
+		Mode: mode,
+	};
+}
+
+async function fetchOpenF1CurrentSessionSnapshot(
+	topics: LiveTimingTopic[],
+): Promise<LiveTimingSnapshot> {
+	const raceControl = topics.includes("RaceControlMessages")
+		? await fetchOpenF1RaceControlMessages()
+		: null;
+	const weather = topics.includes("WeatherData") ? await fetchOpenF1Weather() : null;
+	const stints =
+		topics.includes("DriverList") || topics.includes("TimingAppData")
+			? await fetchOpenF1Stints()
+			: null;
+	const session = raceControl?.session ?? weather?.session ?? stints?.session;
+	if (!session) {
+		throw new Error("OpenF1 snapshot requested with no topics");
 	}
 
-	return data;
+	return {
+		SessionInfo: openF1SessionInfo(session),
+		RaceControlMessages: raceControl
+			? { Messages: raceControl.messages.map(openF1RaceControlMessage) }
+			: undefined,
+		WeatherData: weather
+			? {
+					AirTemp: String(weather.weather.air_temperature),
+					Humidity: String(weather.weather.humidity),
+					Rainfall: String(weather.weather.rainfall),
+					TrackTemp: String(weather.weather.track_temperature),
+					WindDirection: String(weather.weather.wind_direction),
+					WindSpeed: String(weather.weather.wind_speed),
+				}
+			: undefined,
+		DriverList: stints
+			? Object.fromEntries(
+					stints.drivers.map((driver) => [
+						driver.racingNumber,
+						{
+							RacingNumber: String(driver.racingNumber),
+							Tla: driver.tla,
+						},
+					]),
+				)
+			: undefined,
+		TimingAppData: stints
+			? {
+					Lines: Object.fromEntries(
+						stints.stints.map((stint) => {
+							const position = stints.positions
+								.filter((candidate) => candidate.driver_number === stint.driver_number)
+								.toSorted((left, right) => Date.parse(left.date) - Date.parse(right.date))
+								.at(-1);
+							const laps =
+								typeof stint.lap_end === "number"
+									? stint.lap_end - stint.lap_start + 1 + stint.tyre_age_at_start
+									: stint.tyre_age_at_start;
+
+							return [
+								stint.driver_number,
+								{
+									RacingNumber: String(stint.driver_number),
+									Line: position?.position ?? stint.driver_number,
+									Stints: [
+										{
+											Compound: stint.compound,
+											New: stint.tyre_age_at_start === 0,
+											TotalLaps: laps,
+										},
+									],
+								},
+							];
+						}),
+					),
+				}
+			: undefined,
+	};
 }
 
 async function fetchCurrentSessionSnapshot(
 	topics: LiveTimingTopic[],
 	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
 ): Promise<LiveTimingSnapshot> {
-	const session = await fetchJson<CurrentSessionInfo>(`${F1_STATIC_ENDPOINT}/SessionInfo.json`);
-	if (session.ArchiveStatus.Status === "Complete") {
-		const entries = await Promise.all(
-			topics.map(async (topic) => {
-				const data = await fetchOptionalJson(`${F1_STATIC_ENDPOINT}/${session.Path}${topic}.json`);
-				return [topic, data] as const;
-			}),
-		);
-
-		return Object.fromEntries([
-			["SessionInfo", session],
-			...entries.filter((entry): entry is [LiveTimingTopic, unknown] => entry[1] !== undefined),
-		]) as LiveTimingSnapshot;
-	}
-
-	const connection = createConnection();
 	try {
-		await connection.start();
-		return await connection.invoke<LiveTimingSnapshot>("Subscribe", ["SessionInfo", ...topics]);
-	} finally {
-		await connection.stop();
+		const session = await fetchLiveTimingJson<CurrentSessionInfo>(
+			`${F1_STATIC_ENDPOINT}/SessionInfo.json`,
+		);
+		if (session.ArchiveStatus.Status === "Complete") {
+			const entries = await Promise.all(
+				topics.map(async (topic) => {
+					const data = await fetchOptionalLiveTimingJson(
+						`${F1_STATIC_ENDPOINT}/${session.Path}${topic}.json`,
+					);
+					return [topic, data] as const;
+				}),
+			);
+
+			return Object.fromEntries([
+				["SessionInfo", session],
+				...entries.filter((entry): entry is [LiveTimingTopic, unknown] => entry[1] !== undefined),
+			]) as LiveTimingSnapshot;
+		}
+
+		const connection = createConnection();
+		try {
+			await connection.start();
+			return await connection.invoke<LiveTimingSnapshot>("Subscribe", ["SessionInfo", ...topics]);
+		} finally {
+			await connection.stop();
+		}
+	} catch (error) {
+		if (isLiveTimingAccessDenied(error)) {
+			return fetchOpenF1CurrentSessionSnapshot(topics);
+		}
+
+		throw error;
 	}
 }
 

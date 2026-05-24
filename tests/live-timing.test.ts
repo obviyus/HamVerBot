@@ -7,8 +7,10 @@ import {
 	formatAutopostRaceControlMessage,
 	shouldAutopostRaceControlMessage,
 } from "../src/live-timing";
+import { resetOpenF1StateForTests, setOpenF1RequestIntervalForTests } from "../src/openf1";
 
 const F1_STATIC_ENDPOINT = "https://livetiming.formula1.com/static";
+const OPENF1_ENDPOINT = "https://api.openf1.org/v1";
 const originalFetch = globalThis.fetch;
 const fetchMock = mock(async (_input: RequestInfo | URL) => {
 	throw new Error("Unexpected fetch");
@@ -74,6 +76,8 @@ function mockCurrentSessionFetch(
 
 beforeEach(() => {
 	fetchMock.mockReset();
+	resetOpenF1StateForTests();
+	setOpenF1RequestIntervalForTests(0);
 	globalThis.fetch = fetchMock as typeof fetch;
 });
 
@@ -385,5 +389,196 @@ describe("live timing fetchers", () => {
 			})),
 		).rejects.toThrow("boom");
 		expect(stopMock).toHaveBeenCalledTimes(1);
+	});
+
+	test("fetches OpenF1 race control messages when live timing returns 403", async () => {
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+			const url = requestUrl(input);
+			if (url === `${F1_STATIC_ENDPOINT}/SessionInfo.json`) {
+				return new Response(null, { status: 403 });
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/sessions?`)) {
+				return jsonResponse([
+					{
+						date_end: "2026-03-07T02:00:00+00:00",
+						date_start: "2026-03-07T01:00:00+00:00",
+						location: "Australian",
+						meeting_key: 1,
+						session_key: 7782,
+						session_name: "Race",
+						year: 2026,
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/race_control?`)) {
+				return jsonResponse([
+					{
+						category: "SafetyCar",
+						date: "2026-03-07T01:12:00+00:00",
+						flag: null,
+						message: "SAFETY CAR DEPLOYED",
+					},
+				]);
+			}
+
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		expect(
+			fetchCurrentSessionRaceControlMessages(() => {
+				throw new Error("SignalR should not be used after live timing 403");
+			}),
+		).resolves.toEqual({
+			session: {
+				Meeting: { Name: "Australian Grand Prix" },
+				ArchiveStatus: { Status: "Complete" },
+				Name: "Race",
+				Path: "openf1/7782/",
+			},
+			messages: [
+				{
+					Utc: "2026-03-07T01:12:00+00:00",
+					Category: "SafetyCar",
+					Message: "SAFETY CAR DEPLOYED",
+					Flag: undefined,
+					Status: "DEPLOYED",
+					Mode: "SC",
+				},
+			],
+		});
+	});
+
+	test("fetches OpenF1 weather when live timing returns 403", async () => {
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+			const url = requestUrl(input);
+			if (url === `${F1_STATIC_ENDPOINT}/SessionInfo.json`) {
+				return new Response(null, { status: 403 });
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/sessions?`)) {
+				return jsonResponse([
+					{
+						date_end: "2026-03-07T02:00:00+00:00",
+						date_start: "2026-03-07T01:00:00+00:00",
+						location: "Australian",
+						meeting_key: 1,
+						session_key: 7782,
+						session_name: "Practice 2",
+						year: 2026,
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/weather?`)) {
+				return jsonResponse([
+					{
+						air_temperature: 19.4,
+						humidity: 55,
+						rainfall: 0,
+						track_temperature: 32.1,
+						wind_direction: 270,
+						wind_speed: 2.4,
+					},
+				]);
+			}
+
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		expect(fetchSessionWeather()).resolves.toBe(
+			"🌦️ \x02Australian Grand Prix: Practice 2 Weather\x02: Air 19.4C | Track 32.1C | Humidity 55% | Wind 2.4 @ 270deg | Rain 0",
+		);
+	});
+
+	test("fetches OpenF1 stints when live timing returns 403", async () => {
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+			const url = requestUrl(input);
+			if (url === `${F1_STATIC_ENDPOINT}/SessionInfo.json`) {
+				return new Response(null, { status: 403 });
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/sessions?`)) {
+				return jsonResponse([
+					{
+						date_end: "2026-03-07T02:00:00+00:00",
+						date_start: "2026-03-07T01:00:00+00:00",
+						location: "Australian",
+						meeting_key: 1,
+						session_key: 7782,
+						session_name: "Race",
+						year: 2026,
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/drivers?`)) {
+				return jsonResponse([
+					{
+						broadcast_name: "M VERSTAPPEN",
+						driver_number: 1,
+						first_name: "Max",
+						full_name: "Max VERSTAPPEN",
+						last_name: "Verstappen",
+						name_acronym: "VER",
+						team_colour: "4781D7",
+						team_name: "Red Bull Racing",
+					},
+					{
+						broadcast_name: "O PIASTRI",
+						driver_number: 81,
+						first_name: "Oscar",
+						full_name: "Oscar PIASTRI",
+						last_name: "Piastri",
+						name_acronym: "PIA",
+						team_colour: "FF8000",
+						team_name: "McLaren",
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/stints?`)) {
+				return jsonResponse([
+					{
+						compound: "MEDIUM",
+						driver_number: 1,
+						lap_end: 10,
+						lap_start: 1,
+						stint_number: 1,
+						tyre_age_at_start: 0,
+					},
+					{
+						compound: "SOFT",
+						driver_number: 81,
+						lap_end: 12,
+						lap_start: 3,
+						stint_number: 1,
+						tyre_age_at_start: 2,
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/position?`)) {
+				return jsonResponse([
+					{
+						date: "2026-03-07T01:10:00+00:00",
+						driver_number: 81,
+						position: 2,
+					},
+					{
+						date: "2026-03-07T01:10:00+00:00",
+						driver_number: 1,
+						position: 1,
+					},
+				]);
+			}
+
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		expect(fetchSessionStints()).resolves.toBe(
+			"🛞 \x02Australian Grand Prix: Race Stints\x02: VER medium(10,new) | PIA soft(12)",
+		);
 	});
 });

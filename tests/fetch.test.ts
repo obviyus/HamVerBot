@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import * as database from "../src/database";
+import { resetOpenF1StateForTests, setOpenF1RequestIntervalForTests } from "../src/openf1";
 
 type DbClient = Awaited<ReturnType<typeof database.getDb>>;
 
@@ -31,6 +32,8 @@ const {
 } = fetchModule;
 
 const originalFetch = globalThis.fetch;
+const F1_SESSION_ENDPOINT = "https://livetiming.formula1.com/static";
+const OPENF1_ENDPOINT = "https://api.openf1.org/v1";
 const fetchMock = mock(async (_input: RequestInfo | URL) => new Response(null, { status: 500 }));
 
 function jsonResponse(data: unknown, status = 200, bom = false): Response {
@@ -54,6 +57,8 @@ beforeEach(() => {
 	storeDriversMock.mockReset();
 	storeEventResultMock.mockReset();
 	fetchMock.mockReset();
+	resetOpenF1StateForTests();
+	setOpenF1RequestIntervalForTests(0);
 	globalThis.fetch = fetchMock as unknown as typeof fetch;
 	spyOn(database, "getDb").mockImplementation(getDbMock);
 	spyOn(database, "getEventTypeName").mockImplementation(getEventTypeNameMock);
@@ -123,6 +128,62 @@ describe("fetchDriverList", () => {
 			},
 		]);
 	});
+
+	test("stores OpenF1 drivers when live timing blocks static files", async () => {
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+			const url = requestUrl(input);
+			if (url.endsWith("/DriverList.json")) {
+				return new Response(null, { status: 403 });
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/sessions?`)) {
+				return jsonResponse([
+					{
+						date_end: "2026-03-07T02:00:00+00:00",
+						date_start: "2026-03-07T01:00:00+00:00",
+						location: "Australian",
+						meeting_key: 1,
+						session_key: 7782,
+						session_name: "Practice 2",
+						year: 2026,
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/drivers?`)) {
+				return jsonResponse([
+					{
+						broadcast_name: "O PIASTRI",
+						driver_number: 81,
+						first_name: "Oscar",
+						full_name: "Oscar PIASTRI",
+						last_name: "Piastri",
+						name_acronym: "PIA",
+						team_colour: "FF8000",
+						team_name: "McLaren",
+					},
+				]);
+			}
+
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		await fetchDriverList("2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Practice_2/");
+
+		expect(storeDriversMock).toHaveBeenCalledWith([
+			{
+				racingNumber: 81,
+				reference: "",
+				firstName: "Oscar",
+				lastName: "Piastri",
+				fullName: "Oscar PIASTRI",
+				broadcastName: "O PIASTRI",
+				tla: "PIA",
+				teamName: "McLaren",
+				teamColor: "FF8000",
+			},
+		]);
+	});
 });
 
 describe("readCurrentEvent", () => {
@@ -138,6 +199,47 @@ describe("readCurrentEvent", () => {
 			path: "2026/aus/qualifying/",
 			isComplete: true,
 		});
+	});
+
+	test("uses OpenF1 for one hour after live timing returns 403", async () => {
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+			const url = requestUrl(input);
+			if (url === `${F1_SESSION_ENDPOINT}/SessionInfo.json`) {
+				return new Response(null, { status: 403 });
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/sessions?`)) {
+				return jsonResponse([
+					{
+						date_end: "2026-03-07T02:00:00+00:00",
+						date_start: "2026-03-07T01:00:00+00:00",
+						location: "Australian",
+						meeting_key: 1,
+						session_key: 7782,
+						session_name: "Practice 2",
+						year: 2026,
+					},
+				]);
+			}
+
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		await expect(readCurrentEvent()).resolves.toEqual({
+			path: "openf1/7782/",
+			isComplete: true,
+		});
+		await expect(readCurrentEvent()).resolves.toEqual({
+			path: "openf1/7782/",
+			isComplete: true,
+		});
+
+		expect(
+			fetchMock.mock.calls.filter(
+				([input]) =>
+					requestUrl(input as RequestInfo | URL) === `${F1_SESSION_ENDPOINT}/SessionInfo.json`,
+			),
+		).toHaveLength(1);
 	});
 });
 
@@ -369,6 +471,103 @@ describe("fetchResults", () => {
 		await fetchResults("2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Media_Day/");
 
 		expect(storeEventResultMock).not.toHaveBeenCalled();
+	});
+
+	test("fetches OpenF1 session results when live timing returns 403", async () => {
+		dbExecuteMock.mockImplementation(async (query: unknown) => {
+			if (typeof query === "object" && query && "sql" in query) {
+				const sql = String(query.sql);
+				if (sql.includes("FROM results r")) {
+					return { rows: [] };
+				}
+
+				if (sql.includes("AND start_time BETWEEN")) {
+					return { rows: [{ id: 44 }] };
+				}
+			}
+
+			return { rows: [] };
+		});
+
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+			const url = requestUrl(input);
+			if (url.endsWith("/TimingDataF1.json")) {
+				return new Response(null, { status: 403 });
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/sessions?`)) {
+				return jsonResponse([
+					{
+						date_end: "2026-03-07T02:00:00+00:00",
+						date_start: "2026-03-07T01:00:00+00:00",
+						location: "Australian",
+						meeting_key: 1,
+						session_key: 7782,
+						session_name: "Practice 2",
+						year: 2026,
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/drivers?`)) {
+				return jsonResponse([
+					{
+						broadcast_name: "M VERSTAPPEN",
+						driver_number: 1,
+						first_name: "Max",
+						full_name: "Max VERSTAPPEN",
+						last_name: "Verstappen",
+						name_acronym: "VER",
+						team_colour: "4781D7",
+						team_name: "Red Bull Racing",
+					},
+					{
+						broadcast_name: "O PIASTRI",
+						driver_number: 81,
+						first_name: "Oscar",
+						full_name: "Oscar PIASTRI",
+						last_name: "Piastri",
+						name_acronym: "PIA",
+						team_colour: "FF8000",
+						team_name: "McLaren",
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/session_result?`)) {
+				return jsonResponse([
+					{
+						dnf: false,
+						dns: false,
+						dsq: false,
+						driver_number: 81,
+						duration: 77.727,
+						gap_to_leader: 0,
+						position: 1,
+					},
+					{
+						dnf: false,
+						dns: false,
+						dsq: false,
+						driver_number: 1,
+						duration: 77.938,
+						gap_to_leader: 0.211,
+						position: 2,
+					},
+				]);
+			}
+
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		expect(fetchResults("openf1/7782/")).resolves.toBe(
+			"🏎️ \x02Australian Grand Prix: Practice 2 Results\x02: 1. PIA - \x0303[1:17.727]\x03 2. VER - \x0303[+0.211]\x03",
+		);
+		expect(storeEventResultMock).toHaveBeenCalledWith(
+			44,
+			"openf1/7782/",
+			expect.objectContaining({ title: "Australian Grand Prix: Practice 2" }),
+		);
 	});
 });
 

@@ -14,6 +14,13 @@ import type {
 	SessionResults,
 } from "~/types/models";
 import { sessionKeyToEventType, stringToEventType } from "~/utils/events";
+import {
+	fetchLiveTimingJson,
+	fetchOpenF1Drivers,
+	fetchOpenF1SessionResultData,
+	isLiveTimingAccessDenied,
+	readOpenF1CurrentEvent,
+} from "./openf1";
 
 type CurrentConstructorStandings = { MRData: ConstructorMRData };
 type CurrentDriverStandings = { MRData: DriverMRData };
@@ -27,6 +34,7 @@ const SESSION_KEY_ALIASES: Record<string, string> = {
 	sprintshootout: "sprintqualifying",
 	sprintshootoutqualifying: "sprintqualifying",
 };
+const RESULT_EVENT_MATCH_WINDOW_SECONDS = 6 * 60 * 60;
 
 async function fetchJson<T>(url: string): Promise<T> {
 	const response = await fetch(url, {
@@ -46,7 +54,7 @@ export async function fetchDriverList(path: string): Promise<void> {
 	console.log(`Fetching driver list for ${path}...`);
 
 	try {
-		const response = await fetchJson<
+		const response = await fetchLiveTimingJson<
 			Record<
 				string,
 				{
@@ -78,6 +86,13 @@ export async function fetchDriverList(path: string): Promise<void> {
 		await storeDrivers(drivers);
 		console.log(`Successfully processed ${drivers.length} drivers`);
 	} catch (error) {
+		if (isLiveTimingAccessDenied(error)) {
+			const drivers = await fetchOpenF1Drivers(path);
+			await storeDrivers(drivers);
+			console.log(`Successfully processed ${drivers.length} OpenF1 drivers`);
+			return;
+		}
+
 		console.error("Error fetching or processing driver list:", error);
 	}
 }
@@ -86,17 +101,25 @@ export async function readCurrentEvent(): Promise<{
 	path: string;
 	isComplete: boolean;
 }> {
-	const response = await fetchJson<{
-		ArchiveStatus: {
-			Status: string;
-		};
-		Path: string;
-	}>(`${F1_SESSION_ENDPOINT}/SessionInfo.json`);
+	try {
+		const response = await fetchLiveTimingJson<{
+			ArchiveStatus: {
+				Status: string;
+			};
+			Path: string;
+		}>(`${F1_SESSION_ENDPOINT}/SessionInfo.json`);
 
-	return {
-		path: response.Path,
-		isComplete: response.ArchiveStatus.Status === "Complete",
-	};
+		return {
+			path: response.Path,
+			isComplete: response.ArchiveStatus.Status === "Complete",
+		};
+	} catch (error) {
+		if (isLiveTimingAccessDenied(error)) {
+			return readOpenF1CurrentEvent();
+		}
+
+		throw error;
+	}
 }
 
 interface TimingLine {
@@ -124,6 +147,31 @@ interface RaceTableResponse<T> {
 			Races: T[];
 		};
 	};
+}
+
+function eventTypeFromSession(path: string, sessionName = ""): number | null {
+	const lastSegment = path.replace(/\/+$/, "").split("/").filter(Boolean).at(-1) ?? "";
+	let normalizedKey = lastSegment
+		.split("_")
+		.filter(Boolean)
+		.filter((part, index) => !(index === 0 && /^\d{4}-\d{2}-\d{2}$/.test(part)))
+		.join("")
+		.toLowerCase();
+	if (/^\d+$/.test(normalizedKey)) {
+		normalizedKey = "";
+	}
+	if (!normalizedKey && sessionName) {
+		normalizedKey = sessionName.replace(/[^a-z0-9]/gi, "").toLowerCase();
+	}
+	const sessionKey = SESSION_KEY_ALIASES[normalizedKey] || normalizedKey;
+
+	let eventType = sessionKey ? sessionKeyToEventType(sessionKey) : null;
+	if (eventType === null && sessionKey) {
+		const fallback = stringToEventType(sessionKey);
+		eventType = typeof fallback === "number" ? fallback : null;
+	}
+
+	return eventType;
 }
 
 export async function fetchResults(path: string): Promise<string> {
@@ -180,84 +228,88 @@ export async function fetchResults(path: string): Promise<string> {
 
 async function fetchFreshResults(path: string): Promise<SessionResults> {
 	console.log(`Fetching TimingDataF1 for ${path}...`);
-	const timingData = await fetchJson<Record<string, unknown>>(
-		`${F1_SESSION_ENDPOINT}/${path}TimingDataF1.json`,
-	);
+	let eventType: number | null;
+	let meetingName: string;
+	let sessionResult: SessionResults;
+	let sessionStartTime: number | null = null;
+	try {
+		const timingData = await fetchLiveTimingJson<Record<string, unknown>>(
+			`${F1_SESSION_ENDPOINT}/${path}TimingDataF1.json`,
+		);
 
-	console.log("Fetching SessionInfo...");
-	const sessionInfoResponse = await fetchJson<{
-		Meeting: {
-			OfficialName: string;
-		};
-	}>(`${F1_SESSION_ENDPOINT}/SessionInfo.json`);
+		console.log("Fetching SessionInfo...");
+		const sessionInfoResponse = await fetchLiveTimingJson<{
+			Meeting: {
+				OfficialName: string;
+			};
+		}>(`${F1_SESSION_ENDPOINT}/SessionInfo.json`);
 
-	const lines = timingData.Lines as Record<string, TimingLine>;
-	if (!lines) {
-		throw new Error("Failed to extract lines from timing data");
-	}
+		const lines = timingData.Lines as Record<string, TimingLine>;
+		if (!lines) {
+			throw new Error("Failed to extract lines from timing data");
+		}
 
-	const driverList = await getDb().then((db) =>
-		db.execute(`
+		const driverList = await getDb().then((db) =>
+			db.execute(`
 			SELECT racing_number, tla, team_name 
 			FROM driver_list
 		`),
-	);
-	const driversMap = new Map(
-		driverList.rows.map((row) => [
-			row.racing_number as number,
-			{ tla: row.tla as string, team_name: row.team_name as string },
-		]),
-	);
-	const standings: DriverStanding[] = [];
-	for (const driverData of Object.values(lines)) {
-		if (!driverData.Position || !driverData.RacingNumber) {
-			continue;
+		);
+		const driversMap = new Map(
+			driverList.rows.map((row) => [
+				row.racing_number as number,
+				{ tla: row.tla as string, team_name: row.team_name as string },
+			]),
+		);
+		const standings: DriverStanding[] = [];
+		for (const driverData of Object.values(lines)) {
+			if (!driverData.Position || !driverData.RacingNumber) {
+				continue;
+			}
+
+			const position = Number.parseInt(driverData.Position, 10);
+			const racingNumber = Number.parseInt(driverData.RacingNumber, 10);
+			const driver = driversMap.get(racingNumber);
+			if (!driver) {
+				console.warn(`Driver with racing number ${racingNumber} not found in database`);
+				continue;
+			}
+
+			let difference: string | undefined;
+			if (driverData.Stats && Array.isArray(driverData.Stats)) {
+				difference = driverData.Stats.find(
+					(stat) => stat.TimeDifftoPositionAhead !== undefined,
+				)?.TimeDifftoPositionAhead;
+			}
+
+			standings.push({
+				position,
+				driverName: driver.tla,
+				teamName: driver.team_name,
+				time: driverData.BestLapTime?.Value || "",
+				difference,
+			});
+		}
+		standings.sort((a, b) => a.position - b.position);
+		eventType = eventTypeFromSession(path);
+		meetingName = sessionInfoResponse.Meeting.OfficialName;
+		const sessionName = eventType !== null ? await getEventTypeName(eventType) : "";
+		sessionResult = {
+			title: `${meetingName}${sessionName ? `: ${sessionName}` : ""}`,
+			standings,
+		};
+	} catch (error) {
+		if (!isLiveTimingAccessDenied(error)) {
+			throw error;
 		}
 
-		const position = Number.parseInt(driverData.Position, 10);
-		const racingNumber = Number.parseInt(driverData.RacingNumber, 10);
-		const driver = driversMap.get(racingNumber);
-		if (!driver) {
-			console.warn(`Driver with racing number ${racingNumber} not found in database`);
-			continue;
-		}
-
-		let difference: string | undefined;
-		if (driverData.Stats && Array.isArray(driverData.Stats)) {
-			difference = driverData.Stats.find(
-				(stat) => stat.TimeDifftoPositionAhead !== undefined,
-			)?.TimeDifftoPositionAhead;
-		}
-
-		standings.push({
-			position,
-			driverName: driver.tla,
-			teamName: driver.team_name,
-			time: driverData.BestLapTime?.Value || "",
-			difference,
-		});
+		const openF1Result = await fetchOpenF1SessionResultData(path);
+		const session = openF1Result.session;
+		meetingName = `${session.location} Grand Prix`;
+		sessionStartTime = Math.floor(Date.parse(session.date_start) / 1000);
+		eventType = eventTypeFromSession(path, session.session_name);
+		sessionResult = openF1Result.results;
 	}
-	standings.sort((a, b) => a.position - b.position);
-	const lastSegment = path.replace(/\/+$/, "").split("/").filter(Boolean).at(-1) ?? "";
-	const normalizedKey = lastSegment
-		.split("_")
-		.filter(Boolean)
-		.filter((part, index) => !(index === 0 && /^\d{4}-\d{2}-\d{2}$/.test(part)))
-		.join("")
-		.toLowerCase();
-	const sessionKey = SESSION_KEY_ALIASES[normalizedKey] || normalizedKey;
-
-	let eventType = sessionKey ? sessionKeyToEventType(sessionKey) : null;
-	if (eventType === null && sessionKey) {
-		const fallback = stringToEventType(sessionKey);
-		eventType = typeof fallback === "number" ? fallback : null;
-	}
-	const meetingName = sessionInfoResponse.Meeting.OfficialName;
-	const sessionName = eventType !== null ? await getEventTypeName(eventType) : "";
-	const sessionResult: SessionResults = {
-		title: `${meetingName}${sessionName ? `: ${sessionName}` : ""}`,
-		standings,
-	};
 
 	const db = await getDb();
 	try {
@@ -268,14 +320,32 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 				sql: "SELECT id FROM events WHERE meeting_name = ? AND event_type_id = ? LIMIT 1",
 				args: [meetingName, eventType],
 			});
-			const eventId =
-				exact.rows[0]?.id ??
-				(
+			let eventId = exact.rows[0]?.id;
+			if (!eventId && sessionStartTime !== null) {
+				eventId = (
+					await db.execute({
+						sql: `SELECT id FROM events
+							WHERE event_type_id = ?
+							AND start_time BETWEEN ? AND ?
+							ORDER BY abs(start_time - ?)
+							LIMIT 1`,
+						args: [
+							eventType,
+							sessionStartTime - RESULT_EVENT_MATCH_WINDOW_SECONDS,
+							sessionStartTime + RESULT_EVENT_MATCH_WINDOW_SECONDS,
+							sessionStartTime,
+						],
+					})
+				).rows[0]?.id;
+			}
+			if (!eventId) {
+				eventId = (
 					await db.execute({
 						sql: "SELECT id FROM events WHERE meeting_name = ? LIMIT 1",
 						args: [meetingName],
 					})
 				).rows[0]?.id;
+			}
 			if (eventId) {
 				await storeEventResult(eventId as number, path, sessionResult);
 			} else {
