@@ -126,6 +126,17 @@ describe("handleIrcMessage", () => {
 		expect(sendMessageMock).not.toHaveBeenCalled();
 	});
 
+	test("ignores winus", async () => {
+		await handleIrcMessage("winus obviyus", {
+			target: "#fn",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(setPredictionWinnersMock).not.toHaveBeenCalled();
+		expect(sendMessageMock).not.toHaveBeenCalled();
+	});
+
 	test("validates h2h usage", async () => {
 		await handleIrcMessage("h2h ver", {
 			target: "#f1",
@@ -367,17 +378,6 @@ describe("handleIrcMessage", () => {
 		);
 	});
 
-	test("supports winus alias for prediction winners", async () => {
-		await handleIrcMessage("winus obviyus", {
-			target: "#fn",
-			nick: "ordos",
-			isPrivate: false,
-		});
-
-		expect(setPredictionWinnersMock).toHaveBeenCalledWith("#fn", ["obviyus"]);
-		expect(sendMessageMock).toHaveBeenCalledWith("#fn", "Voiced prediction winner: obviyus");
-	});
-
 	test("rejects prediction winners from non-whitelisted users", async () => {
 		await handleIrcMessage("winner obviyus", {
 			target: "#fn",
@@ -389,15 +389,15 @@ describe("handleIrcMessage", () => {
 		expect(sendMessageMock).toHaveBeenCalledWith("#fn", "Only prediction admins can set winners.");
 	});
 
-	test("rejects prediction winners outside #fn", async () => {
+	test("sets prediction winners in the current channel", async () => {
 		await handleIrcMessage("winner obviyus", {
 			target: "#f1",
 			nick: "obviyus",
 			isPrivate: false,
 		});
 
-		expect(setPredictionWinnersMock).not.toHaveBeenCalled();
-		expect(sendMessageMock).toHaveBeenCalledWith("#f1", "Run this in #fn.");
+		expect(setPredictionWinnersMock).toHaveBeenCalledWith("#f1", ["obviyus"]);
+		expect(sendMessageMock).toHaveBeenCalledWith("#f1", "Voiced prediction winner: obviyus");
 	});
 
 	test("rejects prediction winners in private messages", async () => {

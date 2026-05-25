@@ -1,9 +1,8 @@
 # [1.6.0](https://github.com/obviyus/HamVerBot/compare/v1.5.15...v1.6.0) (2026-05-25)
 
-
 ### Features
 
-* **irc:** add prediction winner voices ([a4843e1](https://github.com/obviyus/HamVerBot/commit/a4843e1d9fbe1826895668a387710bf99dda5615))
+- **irc:** add prediction winner voices ([a4843e1](https://github.com/obviyus/HamVerBot/commit/a4843e1d9fbe1826895668a387710bf99dda5615))
 
 ## [1.5.15](https://github.com/obviyus/HamVerBot/compare/v1.5.14...v1.5.15) (2026-05-25)
 

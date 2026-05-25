@@ -199,10 +199,6 @@ const commandHandlers: Record<string, CommandHandler> = {
 				return "Run this in the channel you want to update.";
 			}
 
-			if (context.target.toLowerCase() !== "#fn") {
-				return "Run this in #fn.";
-			}
-
 			if (!WINNER_COMMAND_USERS.has(context.nick.toLowerCase())) {
 				return "Only prediction admins can set winners.";
 			}
@@ -233,7 +229,6 @@ const commandAliases: Record<string, string> = {
 	d: "drivers",
 	c: "constructors",
 	h: "help",
-	winus: "winner",
 };
 
 export async function handleIrcMessage(message: string, context: CommandContext): Promise<void> {
