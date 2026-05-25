@@ -1,3 +1,10 @@
+## [1.5.12](https://github.com/obviyus/HamVerBot/compare/v1.5.11...v1.5.12) (2026-05-25)
+
+
+### Bug Fixes
+
+* **results:** normalize OpenF1 session result output ([0f8194f](https://github.com/obviyus/HamVerBot/commit/0f8194fd3714d3020db7cb02b7899a2cf98f5e27))
+
 ## [1.5.11](https://github.com/obviyus/HamVerBot/compare/v1.5.10...v1.5.11) (2026-05-24)
 
 
