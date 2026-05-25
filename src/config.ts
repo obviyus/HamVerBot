@@ -23,6 +23,7 @@ export interface DatabaseConfig {
 }
 
 export interface LiveTimingConfig {
+	signalrBaseUrl: string;
 	staticBaseUrl: string;
 }
 
@@ -62,6 +63,9 @@ export function loadConfig(): AppConfig {
 			authToken: process.env.TURSO_AUTH_TOKEN || "",
 		},
 		liveTiming: {
+			signalrBaseUrl: cleanBaseUrl(
+				process.env.F1_SIGNALR_BASE_URL || "https://livetiming.formula1.com/signalrcore",
+			),
 			staticBaseUrl: cleanBaseUrl(
 				process.env.F1_STATIC_BASE_URL || "https://livetiming.formula1.com/static",
 			),

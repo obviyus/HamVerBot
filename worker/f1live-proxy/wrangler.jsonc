@@ -1,0 +1,8 @@
+{
+	"$schema": "https://json.schemastore.org/wrangler.json",
+	"name": "hamverbot-f1live",
+	"main": "index.js",
+	"compatibility_date": "2026-05-25",
+	"workers_dev": true,
+	"preview_urls": false,
+}

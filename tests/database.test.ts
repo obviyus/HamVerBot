@@ -222,7 +222,8 @@ describe("database module", () => {
 		});
 
 		const database = await loadDatabaseModule();
-		await database.storeEventResult(42, "openf1/11291/", {
+		const path = "2026/2026-05-24_Canadian_Grand_Prix/2026-05-24_Race/";
+		await database.storeEventResult(42, path, {
 			title: "Canadian Grand Prix: Race",
 			standings: [],
 		});
@@ -233,7 +234,7 @@ describe("database module", () => {
 				return (
 					query.sql.includes("ON CONFLICT(path) DO UPDATE SET") &&
 					query.args?.[0] === 42 &&
-					query.args?.[1] === "openf1/11291/"
+					query.args?.[1] === path
 				);
 			}),
 		).toBe(true);

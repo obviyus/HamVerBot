@@ -1,51 +1,44 @@
 ## [1.5.14](https://github.com/obviyus/HamVerBot/compare/v1.5.13...v1.5.14) (2026-05-25)
 
-
 ### Bug Fixes
 
-* **live-timing:** allow configurable static endpoint ([49fe67a](https://github.com/obviyus/HamVerBot/commit/49fe67a08d87de259ff6a60c111b5d03d7665ab4))
+- **live-timing:** allow configurable static endpoint ([49fe67a](https://github.com/obviyus/HamVerBot/commit/49fe67a08d87de259ff6a60c111b5d03d7665ab4))
 
 ## [1.5.13](https://github.com/obviyus/HamVerBot/compare/v1.5.12...v1.5.13) (2026-05-25)
 
-
 ### Bug Fixes
 
-* **autopost:** ignore stale OpenF1 race control messages ([4cd9979](https://github.com/obviyus/HamVerBot/commit/4cd9979dcf8106a3769a17e10ec1e28ceb5d3d27))
+- **autopost:** ignore stale OpenF1 race control messages ([4cd9979](https://github.com/obviyus/HamVerBot/commit/4cd9979dcf8106a3769a17e10ec1e28ceb5d3d27))
 
 ## [1.5.12](https://github.com/obviyus/HamVerBot/compare/v1.5.11...v1.5.12) (2026-05-25)
 
-
 ### Bug Fixes
 
-* **results:** normalize OpenF1 session result output ([0f8194f](https://github.com/obviyus/HamVerBot/commit/0f8194fd3714d3020db7cb02b7899a2cf98f5e27))
+- **results:** normalize OpenF1 session result output ([0f8194f](https://github.com/obviyus/HamVerBot/commit/0f8194fd3714d3020db7cb02b7899a2cf98f5e27))
 
 ## [1.5.11](https://github.com/obviyus/HamVerBot/compare/v1.5.10...v1.5.11) (2026-05-24)
 
-
 ### Bug Fixes
 
-* **deploy:** set watchtower docker api version ([3df2785](https://github.com/obviyus/HamVerBot/commit/3df27859aa719e877a9ebd2ce13f3058e9d5b790))
+- **deploy:** set watchtower docker api version ([3df2785](https://github.com/obviyus/HamVerBot/commit/3df27859aa719e877a9ebd2ce13f3058e9d5b790))
 
 ## [1.5.10](https://github.com/obviyus/HamVerBot/compare/v1.5.9...v1.5.10) (2026-05-24)
 
-
 ### Bug Fixes
 
-* **live-timing:** add OpenF1 fallback for blocked F1 static ([9f411d9](https://github.com/obviyus/HamVerBot/commit/9f411d98cc1b84d62959c3945c1fb059fe68fe9d))
+- **live-timing:** add OpenF1 fallback for blocked F1 static ([9f411d9](https://github.com/obviyus/HamVerBot/commit/9f411d98cc1b84d62959c3945c1fb059fe68fe9d))
 
 ## [1.5.9](https://github.com/obviyus/HamVerBot/compare/v1.5.8...v1.5.9) (2026-05-03)
 
-
 ### Bug Fixes
 
-* **autopost:** wait for irc before race alerts ([adc60dd](https://github.com/obviyus/HamVerBot/commit/adc60ddd8eeb1af1a8b083ecf9e02231dbbf8798))
+- **autopost:** wait for irc before race alerts ([adc60dd](https://github.com/obviyus/HamVerBot/commit/adc60ddd8eeb1af1a8b083ecf9e02231dbbf8798))
 
 ## [1.5.8](https://github.com/obviyus/HamVerBot/compare/v1.5.7...v1.5.8) (2026-04-28)
 
-
 ### Bug Fixes
 
-* normalize changelog formatting ([#89](https://github.com/obviyus/HamVerBot/issues/89)) ([5c62459](https://github.com/obviyus/HamVerBot/commit/5c6245936af1adc462955ce9569217bcf6af0c9b))
+- normalize changelog formatting ([#89](https://github.com/obviyus/HamVerBot/issues/89)) ([5c62459](https://github.com/obviyus/HamVerBot/commit/5c6245936af1adc462955ce9569217bcf6af0c9b))
 
 ## [1.5.7](https://github.com/obviyus/HamVerBot/compare/v1.5.6...v1.5.7) (2026-04-07)
 
