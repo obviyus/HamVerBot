@@ -16,6 +16,10 @@ const returnWccStandingsMock = mock(async () => "wcc");
 const returnWdcStandingsMock = mock(async () => "wdc");
 
 const sendMessageMock = mock((_target: string, _message: string) => {});
+const setPredictionWinnersMock = mock((_target: string, _winners: string[]) => ({
+	unvoiced: [] as string[],
+	voiced: [] as string[],
+}));
 
 const buildRaceControlMessageKeyMock = mock((message: { id: string }) => message.id);
 const fetchCurrentSessionRaceControlMessagesMock = mock(async () => ({
@@ -45,6 +49,7 @@ beforeEach(() => {
 	returnWdcStandingsMock.mockReset();
 
 	sendMessageMock.mockReset();
+	setPredictionWinnersMock.mockReset();
 
 	buildRaceControlMessageKeyMock.mockReset();
 	buildRaceControlMessageKeyMock.mockImplementation((message: { id: string }) => message.id);
@@ -69,6 +74,7 @@ beforeEach(() => {
 	spyOn(fetchModule, "returnWccStandings").mockImplementation(returnWccStandingsMock);
 	spyOn(fetchModule, "returnWdcStandings").mockImplementation(returnWdcStandingsMock);
 	spyOn(irc, "sendMessage").mockImplementation(sendMessageMock);
+	spyOn(irc, "setPredictionWinners").mockImplementation(setPredictionWinnersMock);
 	spyOn(liveTiming, "buildRaceControlMessageKey").mockImplementation(
 		buildRaceControlMessageKeyMock,
 	);
@@ -344,6 +350,67 @@ describe("handleIrcMessage", () => {
 		expect(sendMessageMock).toHaveBeenCalledWith(
 			"#test",
 			"Autopost enabled in #test. Watching red flags, safety car, penalties.",
+		);
+	});
+
+	test("sets prediction winners for whitelisted users", async () => {
+		await handleIrcMessage("winner @obviyus +tomf ordos", {
+			target: "#fn",
+			nick: "tomf",
+			isPrivate: false,
+		});
+
+		expect(setPredictionWinnersMock).toHaveBeenCalledWith("#fn", ["obviyus", "tomf", "ordos"]);
+		expect(sendMessageMock).toHaveBeenCalledWith(
+			"#fn",
+			"Voiced prediction winners: obviyus, tomf, ordos",
+		);
+	});
+
+	test("supports winus alias for prediction winners", async () => {
+		await handleIrcMessage("winus obviyus", {
+			target: "#fn",
+			nick: "ordos",
+			isPrivate: false,
+		});
+
+		expect(setPredictionWinnersMock).toHaveBeenCalledWith("#fn", ["obviyus"]);
+		expect(sendMessageMock).toHaveBeenCalledWith("#fn", "Voiced prediction winner: obviyus");
+	});
+
+	test("rejects prediction winners from non-whitelisted users", async () => {
+		await handleIrcMessage("winner obviyus", {
+			target: "#fn",
+			nick: "someoneelse",
+			isPrivate: false,
+		});
+
+		expect(setPredictionWinnersMock).not.toHaveBeenCalled();
+		expect(sendMessageMock).toHaveBeenCalledWith("#fn", "Only prediction admins can set winners.");
+	});
+
+	test("rejects prediction winners outside #fn", async () => {
+		await handleIrcMessage("winner obviyus", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(setPredictionWinnersMock).not.toHaveBeenCalled();
+		expect(sendMessageMock).toHaveBeenCalledWith("#f1", "Run this in #fn.");
+	});
+
+	test("rejects prediction winners in private messages", async () => {
+		await handleIrcMessage("winner obviyus", {
+			target: "obviyus",
+			nick: "obviyus",
+			isPrivate: true,
+		});
+
+		expect(setPredictionWinnersMock).not.toHaveBeenCalled();
+		expect(sendMessageMock).toHaveBeenCalledWith(
+			"obviyus",
+			"Run this in the channel you want to update.",
 		);
 	});
 });

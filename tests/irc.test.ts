@@ -14,7 +14,7 @@ class FakeClient {
 	sayCalls: Array<{ target: string; message: string }> = [];
 	connectCalls: Array<Record<string, unknown>> = [];
 	joinCalls: string[] = [];
-	rawCalls: string[] = [];
+	rawCalls: Array<string | string[]> = [];
 	partCalls: string[] = [];
 	quitCalls: string[] = [];
 	network = {
@@ -51,7 +51,7 @@ class FakeClient {
 		this.joinCalls.push(channel);
 	}
 
-	raw(message: string): void {
+	raw(message: string | string[]): void {
 		this.rawCalls.push(message);
 	}
 
@@ -81,6 +81,7 @@ const {
 	initIrcClient,
 	isClientAuthenticated,
 	sendMessage,
+	setPredictionWinners,
 	waitForIrcReady,
 } = await import("../src/irc.ts");
 
@@ -203,6 +204,65 @@ describe("IRC client", () => {
 		expect(client.sayCalls.slice(-2)).toEqual([
 			{ target: "#test", message: "lights out" },
 			{ target: "#main", message: "lights out" },
+		]);
+	});
+
+	test("replaces voiced prediction winners", async () => {
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			secure: true,
+			channels: ["#fn"],
+		});
+
+		const client = getClient() as unknown as FakeClient;
+		client.emit("userlist", {
+			channel: "#fn",
+			users: [
+				{ nick: "oldwinner", modes: ["v"] },
+				{ nick: "tomf", modes: ["v"] },
+				{ nick: "lurker", modes: [] },
+			],
+		});
+
+		expect(setPredictionWinners("#fn", ["obviyus", "tomf", "ordos"])).toEqual({
+			unvoiced: ["oldwinner"],
+			voiced: ["obviyus", "ordos"],
+		});
+		expect(client.rawCalls.slice(-2)).toEqual([
+			"MODE #fn -v oldwinner",
+			"MODE #fn +vv obviyus ordos",
+		]);
+	});
+
+	test("chunks prediction winner mode changes", async () => {
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			secure: true,
+			channels: ["#fn"],
+		});
+
+		const client = getClient() as unknown as FakeClient;
+		client.emit("userlist", {
+			channel: "#fn",
+			users: [
+				{ nick: "a", modes: ["v"] },
+				{ nick: "b", modes: ["v"] },
+				{ nick: "c", modes: ["v"] },
+				{ nick: "d", modes: ["v"] },
+				{ nick: "e", modes: ["v"] },
+			],
+		});
+
+		setPredictionWinners("#fn", ["f", "g", "h", "i", "j"]);
+		expect(client.rawCalls.slice(-4)).toEqual([
+			"MODE #fn -vvvv a b c d",
+			"MODE #fn -v e",
+			"MODE #fn +vvvv f g h i",
+			"MODE #fn +v j",
 		]);
 	});
 

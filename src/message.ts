@@ -9,7 +9,7 @@ import {
 	markAutopostMessagesSeen,
 } from "./database";
 import { fetchHeadToHead, fetchResults, returnWccStandings, returnWdcStandings } from "./fetch";
-import { sendMessage } from "./irc";
+import { sendMessage, setPredictionWinners } from "./irc";
 import {
 	buildRaceControlMessageKey,
 	fetchCurrentSessionRaceControlMessages,
@@ -85,6 +85,7 @@ async function getNextEventMessage(eventType?: EventType, timezone?: number): Pr
 }
 
 type CommandHandler = (args: string[], context: CommandContext) => Promise<string>;
+const WINNER_COMMAND_USERS = new Set(["obviyus", "tomf", "ordos"]);
 
 function withErrorReply(
 	errorLabel: string,
@@ -190,8 +191,38 @@ const commandHandlers: Record<string, CommandHandler> = {
 		},
 	),
 
+	winner: withErrorReply(
+		"Error setting prediction winners",
+		"Failed to set prediction winners.",
+		async (args, context) => {
+			if (context.isPrivate) {
+				return "Run this in the channel you want to update.";
+			}
+
+			if (context.target.toLowerCase() !== "#fn") {
+				return "Run this in #fn.";
+			}
+
+			if (!WINNER_COMMAND_USERS.has(context.nick.toLowerCase())) {
+				return "Only prediction admins can set winners.";
+			}
+
+			if (args.length === 0) {
+				return "Usage: !winner nick [nick ...]";
+			}
+
+			const winners = [...new Set(args.map((arg) => arg.replace(/^[@+~&%]+/, "")).filter(Boolean))];
+			if (winners.length === 0) {
+				return "Usage: !winner nick [nick ...]";
+			}
+
+			setPredictionWinners(context.target, winners);
+			return `Voiced prediction winner${winners.length === 1 ? "" : "s"}: ${winners.join(", ")}`;
+		},
+	),
+
 	help: async () => {
-		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !weather, !stints, !enable autopost, !help";
+		return "Available commands: !ping, !next [timezone], !when [event] [timezone], !prev, !drivers, !constructors, !h2h VER HAM, !weather, !stints, !enable autopost, !winner nick [nick ...], !help";
 	},
 };
 
@@ -202,6 +233,7 @@ const commandAliases: Record<string, string> = {
 	d: "drivers",
 	c: "constructors",
 	h: "help",
+	winus: "winner",
 };
 
 export async function handleIrcMessage(message: string, context: CommandContext): Promise<void> {

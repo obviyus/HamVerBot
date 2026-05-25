@@ -20,6 +20,7 @@ interface IrcClientConfig {
 const DEFAULT_IRC_PORT = 6667;
 const LIBERA_HOST_REGEX = /(^|\.)libera\.chat$/i;
 const IRC_MAX_LINE_BYTES = 510;
+const MAX_MODES_PER_COMMAND = 4;
 
 let ircClient: Client | null = null;
 let isAuthenticated = false;
@@ -28,6 +29,41 @@ let isReady = false;
 let shouldJoinOnReady = false;
 let configuredChannels: string[] = [];
 let readyWaiters: Array<() => void> = [];
+const voicedUsersByChannel = new Map<string, Map<string, string>>();
+
+function channelKey(channel: string): string {
+	return channel.toLowerCase();
+}
+
+function userKey(nick: string): string {
+	return nick.toLowerCase();
+}
+
+function voicedUsers(channel: string): Map<string, string> {
+	const key = channelKey(channel);
+	let users = voicedUsersByChannel.get(key);
+	if (!users) {
+		users = new Map();
+		voicedUsersByChannel.set(key, users);
+	}
+	return users;
+}
+
+function setUserVoice(channel: string, nick: string, isVoiced: boolean): void {
+	const users = voicedUsers(channel);
+	if (isVoiced) {
+		users.set(userKey(nick), nick);
+	} else {
+		users.delete(userKey(nick));
+	}
+}
+
+function removeUserFromVoiceCache(nick: string): void {
+	const key = userKey(nick);
+	for (const users of voicedUsersByChannel.values()) {
+		users.delete(key);
+	}
+}
 
 function hasConfiguredNickPassword(nickPassword?: string): nickPassword is string {
 	return !!nickPassword && nickPassword !== "password";
@@ -62,6 +98,7 @@ function resetConnectionState(): void {
 	isRegistered = false;
 	isReady = false;
 	shouldJoinOnReady = false;
+	voicedUsersByChannel.clear();
 }
 
 function createAndConnectClient(config: IrcClientConfig): Client {
@@ -177,6 +214,43 @@ export async function broadcast(message: string): Promise<void> {
 	for (const channel of channels) {
 		sendWithLogging(channel, message);
 	}
+}
+
+function sendModeChanges(channel: string, mode: string, nicks: string[]): void {
+	const client = getClient();
+	const modeSign = mode[0];
+	const modeName = mode.slice(1);
+	for (let index = 0; index < nicks.length; index += MAX_MODES_PER_COMMAND) {
+		const chunk = nicks.slice(index, index + MAX_MODES_PER_COMMAND);
+		client.raw(`MODE ${channel} ${modeSign}${modeName.repeat(chunk.length)} ${chunk.join(" ")}`);
+	}
+}
+
+export function setPredictionWinners(
+	channel: string,
+	winners: string[],
+): {
+	voiced: string[];
+	unvoiced: string[];
+} {
+	const currentVoicedUsers = voicedUsers(channel);
+	const winnerKeys = new Set(winners.map(userKey));
+	const unvoiced = [...currentVoicedUsers.values()].filter(
+		(nick) => !winnerKeys.has(userKey(nick)),
+	);
+	const voiced = winners.filter((nick) => !currentVoicedUsers.has(userKey(nick)));
+
+	sendModeChanges(channel, "-v", unvoiced);
+	sendModeChanges(channel, "+v", voiced);
+
+	for (const nick of unvoiced) {
+		setUserVoice(channel, nick, false);
+	}
+	for (const nick of voiced) {
+		setUserVoice(channel, nick, true);
+	}
+
+	return { voiced, unvoiced };
 }
 
 export async function initIrcClient(config: IrcClientConfig): Promise<Client> {
@@ -323,6 +397,35 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		dispatchCommand(event.message, event.target, event.nick, false);
 	});
 
+	client.on("userlist", (event: unknown) => {
+		const userlistEvent = event as {
+			channel: string;
+			users: Array<{ nick: string; modes?: string[] }>;
+		};
+		const users = voicedUsers(userlistEvent.channel);
+		users.clear();
+		for (const user of userlistEvent.users) {
+			if (user.modes?.includes("v")) {
+				users.set(userKey(user.nick), user.nick);
+			}
+		}
+	});
+
+	client.on("mode", (event: unknown) => {
+		const modeEvent = event as {
+			target: string;
+			modes: Array<{ mode: string; param?: string | null }>;
+		};
+		for (const mode of modeEvent.modes) {
+			if (!mode.param) continue;
+			if (mode.mode === "+v") {
+				setUserVoice(modeEvent.target, mode.param, true);
+			} else if (mode.mode === "-v") {
+				setUserVoice(modeEvent.target, mode.param, false);
+			}
+		}
+	});
+
 	client.on("privmsg", (event) => {
 		if (event.target === nickname) {
 			console.log(`[PM] ${event.nick}: ${event.message}`);
@@ -346,6 +449,7 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 
 	client.on("part", (event: unknown) => {
 		const partEvent = event as { nick: string; channel: string; message?: string };
+		setUserVoice(partEvent.channel, partEvent.nick, false);
 		console.log(
 			`${partEvent.nick} left ${partEvent.channel}: ${partEvent.message || "No message"}`,
 		);
@@ -353,6 +457,7 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 
 	client.on("quit", (event: unknown) => {
 		const quitEvent = event as { nick: string; message?: string };
+		removeUserFromVoiceCache(quitEvent.nick);
 		console.log(`${quitEvent.nick} quit: ${quitEvent.message || "No message"}`);
 	});
 
