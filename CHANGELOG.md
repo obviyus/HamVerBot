@@ -1,3 +1,10 @@
+## [1.5.15](https://github.com/obviyus/HamVerBot/compare/v1.5.14...v1.5.15) (2026-05-25)
+
+
+### Bug Fixes
+
+* **live-timing:** proxy official F1 timing ([84ecb96](https://github.com/obviyus/HamVerBot/commit/84ecb96f493c2ec07912fc65f4c4bd4538a9650d))
+
 ## [1.5.14](https://github.com/obviyus/HamVerBot/compare/v1.5.13...v1.5.14) (2026-05-25)
 
 ### Bug Fixes
