@@ -1,6 +1,7 @@
 import * as signalR from "@microsoft/signalr";
 import {
 	fetchLiveTimingJson,
+	fetchOpenF1MeetingName,
 	fetchOpenF1RaceControlMessages,
 	fetchOpenF1Stints,
 	fetchOpenF1Weather,
@@ -13,6 +14,7 @@ import {
 
 const F1_STATIC_ENDPOINT = "https://livetiming.formula1.com/static";
 const F1_SIGNALR_ENDPOINT = "https://livetiming.formula1.com/signalrcore";
+const AUTOPOST_RACE_CONTROL_WINDOW_MS = 5 * 60 * 1000;
 
 interface CurrentSessionInfo {
 	Meeting: {
@@ -189,6 +191,15 @@ export function shouldAutopostRaceControlMessage(message: RaceControlMessage): b
 	);
 }
 
+function raceControlTimestamp(utc: string): number {
+	return Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(utc) ? utc : `${utc}Z`);
+}
+
+export function isRecentRaceControlMessage(message: RaceControlMessage, now = Date.now()): boolean {
+	const timestamp = raceControlTimestamp(message.Utc);
+	return Number.isFinite(timestamp) && timestamp >= now - AUTOPOST_RACE_CONTROL_WINDOW_MS;
+}
+
 export function formatAutopostRaceControlMessage(
 	session: CurrentSessionInfo,
 	message: RaceControlMessage,
@@ -206,10 +217,10 @@ export function formatAutopostRaceControlMessage(
 	return `⚖️ \x02${title}\x02: ${message.Message}`;
 }
 
-function openF1SessionInfo(session: OpenF1Session): CurrentSessionInfo {
+function openF1SessionInfo(session: OpenF1Session, meetingName: string): CurrentSessionInfo {
 	return {
 		Meeting: {
-			Name: `${session.location} Grand Prix`,
+			Name: meetingName,
 		},
 		ArchiveStatus: {
 			Status: Date.parse(session.date_end) <= Date.now() ? "Complete" : "Generating",
@@ -259,9 +270,10 @@ async function fetchOpenF1CurrentSessionSnapshot(
 	if (!session) {
 		throw new Error("OpenF1 snapshot requested with no topics");
 	}
+	const meetingName = await fetchOpenF1MeetingName(session);
 
 	return {
-		SessionInfo: openF1SessionInfo(session),
+		SessionInfo: openF1SessionInfo(session, meetingName),
 		RaceControlMessages: raceControl
 			? { Messages: raceControl.messages.map(openF1RaceControlMessage) }
 			: undefined,

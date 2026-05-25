@@ -233,8 +233,8 @@ export function openF1SessionKeyFromPath(path: string): number | null {
 	return match ? Number.parseInt(match[1], 10) : null;
 }
 
-export function openF1SessionTitle(session: OpenF1Session, meetingName?: string): string {
-	return `${meetingName ?? `${session.location} Grand Prix`}: ${session.session_name}`;
+export function openF1SessionTitle(session: OpenF1Session, meetingName: string): string {
+	return `${meetingName}: ${session.session_name}`;
 }
 
 export async function fetchOpenF1CurrentSession(): Promise<OpenF1Session> {
@@ -298,6 +298,18 @@ export async function fetchOpenF1Drivers(path: string): Promise<Driver[]> {
 	});
 
 	return openF1Drivers(drivers);
+}
+
+export async function fetchOpenF1MeetingName(session: OpenF1Session): Promise<string> {
+	const meetings = await fetchOpenF1Json<OpenF1Meeting[]>("meetings", {
+		meeting_key: String(session.meeting_key),
+	});
+	const meeting = meetings[0];
+	if (!meeting) {
+		throw new Error(`OpenF1 meeting not found for key ${session.meeting_key}`);
+	}
+
+	return meeting.meeting_name;
 }
 
 function openF1Drivers(drivers: OpenF1Driver[]): Driver[] {
@@ -419,16 +431,14 @@ export async function fetchOpenF1SessionResultData(
 	path: string,
 ): Promise<{ session: OpenF1Session; meetingName: string; results: SessionResults }> {
 	const session = await resolveOpenF1Session(path);
-	const [driverRows, meetingRows, results] = await Promise.all([
+	const [driverRows, meetingName, results] = await Promise.all([
 		fetchOpenF1Json<OpenF1Driver[]>("drivers", { session_key: String(session.session_key) }),
-		fetchOpenF1Json<OpenF1Meeting[]>("meetings", { meeting_key: String(session.meeting_key) }),
+		fetchOpenF1MeetingName(session),
 		fetchOpenF1Json<OpenF1SessionResult[]>("session_result", {
 			session_key: String(session.session_key),
 		}),
 	]);
 
-	const meeting = meetingRows[0];
-	const meetingName = meeting?.meeting_name ?? `${session.location} Grand Prix`;
 	const drivers = openF1Drivers(driverRows);
 	const driversByNumber = new Map(drivers.map((driver) => [driver.racingNumber, driver]));
 	const standings: DriverStanding[] = results

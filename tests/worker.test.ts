@@ -38,6 +38,7 @@ const liveTimingMocks = {
 	formatAutopostRaceControlMessage: mock(
 		(_session: unknown, message: { id: string }) => `msg:${message.id}`,
 	),
+	isRecentRaceControlMessage: mock((message: { isRecent?: boolean }) => message.isRecent !== false),
 	shouldAutopostRaceControlMessage: mock(
 		(message: { shouldAutopost?: boolean }) => !!message.shouldAutopost,
 	),
@@ -101,6 +102,10 @@ beforeEach(() => {
 	liveTimingMocks.formatAutopostRaceControlMessage.mockImplementation(
 		(_session: unknown, message: { id: string }) => `msg:${message.id}`,
 	);
+	liveTimingMocks.isRecentRaceControlMessage.mockReset();
+	liveTimingMocks.isRecentRaceControlMessage.mockImplementation(
+		(message: { isRecent?: boolean }) => message.isRecent !== false,
+	);
 	liveTimingMocks.shouldAutopostRaceControlMessage.mockReset();
 	liveTimingMocks.shouldAutopostRaceControlMessage.mockImplementation(
 		(message: { shouldAutopost?: boolean }) => !!message.shouldAutopost,
@@ -131,6 +136,9 @@ beforeEach(() => {
 	);
 	spyOn(liveTiming, "formatAutopostRaceControlMessage").mockImplementation(
 		liveTimingMocks.formatAutopostRaceControlMessage,
+	);
+	spyOn(liveTiming, "isRecentRaceControlMessage").mockImplementation(
+		liveTimingMocks.isRecentRaceControlMessage,
 	);
 	spyOn(liveTiming, "shouldAutopostRaceControlMessage").mockImplementation(
 		liveTimingMocks.shouldAutopostRaceControlMessage,
@@ -169,6 +177,7 @@ describe("processJob", () => {
 			messages: [
 				{ id: "seen", shouldAutopost: true },
 				{ id: "red", shouldAutopost: true },
+				{ id: "stale", shouldAutopost: true, isRecent: false },
 				{ id: "ignore", shouldAutopost: false },
 			],
 		});

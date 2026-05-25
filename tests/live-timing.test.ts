@@ -5,6 +5,7 @@ import {
 	fetchSessionStints,
 	fetchSessionWeather,
 	formatAutopostRaceControlMessage,
+	isRecentRaceControlMessage,
 	shouldAutopostRaceControlMessage,
 } from "../src/live-timing";
 import { resetOpenF1StateForTests, setOpenF1RequestIntervalForTests } from "../src/openf1";
@@ -137,6 +138,30 @@ describe("live timing helpers", () => {
 				Category: "Other",
 				Message: "NO PENALTY FOR CAR 4",
 			}),
+		).toBe(false);
+	});
+
+	test("filters stale autopost race control messages", () => {
+		const now = Date.parse("2026-05-24T22:30:00Z");
+		expect(
+			isRecentRaceControlMessage(
+				{
+					Utc: "2026-05-24T22:26:00+00:00",
+					Category: "Other",
+					Message: "FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 27",
+				},
+				now,
+			),
+		).toBe(true);
+		expect(
+			isRecentRaceControlMessage(
+				{
+					Utc: "2026-05-24T21:37:39+00:00",
+					Category: "Other",
+					Message: "FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 5",
+				},
+				now,
+			),
 		).toBe(false);
 	});
 
@@ -401,16 +426,20 @@ describe("live timing fetchers", () => {
 			if (url.startsWith(`${OPENF1_ENDPOINT}/sessions?`)) {
 				return jsonResponse([
 					{
-						date_end: "2026-03-07T02:00:00+00:00",
-						date_start: "2026-03-07T01:00:00+00:00",
-						location: "Australian",
-						meeting_key: 1,
-						session_key: 7782,
+						date_end: "2026-05-24T22:00:00+00:00",
+						date_start: "2026-05-24T20:00:00+00:00",
+						location: "Montréal",
+						meeting_key: 1285,
+						session_key: 11291,
 						session_name: "Race",
 						session_type: "Race",
 						year: 2026,
 					},
 				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/meetings?`)) {
+				return jsonResponse([{ meeting_name: "Canadian Grand Prix" }]);
 			}
 
 			if (url.startsWith(`${OPENF1_ENDPOINT}/race_control?`)) {
@@ -433,10 +462,10 @@ describe("live timing fetchers", () => {
 			}),
 		).resolves.toEqual({
 			session: {
-				Meeting: { Name: "Australian Grand Prix" },
+				Meeting: { Name: "Canadian Grand Prix" },
 				ArchiveStatus: { Status: "Complete" },
 				Name: "Race",
-				Path: "openf1/7782/",
+				Path: "openf1/11291/",
 			},
 			messages: [
 				{
@@ -471,6 +500,10 @@ describe("live timing fetchers", () => {
 						year: 2026,
 					},
 				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/meetings?`)) {
+				return jsonResponse([{ meeting_name: "Australian Grand Prix" }]);
 			}
 
 			if (url.startsWith(`${OPENF1_ENDPOINT}/weather?`)) {
@@ -514,6 +547,10 @@ describe("live timing fetchers", () => {
 						year: 2026,
 					},
 				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/meetings?`)) {
+				return jsonResponse([{ meeting_name: "Australian Grand Prix" }]);
 			}
 
 			if (url.startsWith(`${OPENF1_ENDPOINT}/drivers?`)) {

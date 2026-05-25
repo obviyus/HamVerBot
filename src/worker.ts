@@ -18,6 +18,7 @@ import {
 	buildRaceControlMessageKey,
 	fetchCurrentSessionRaceControlMessages,
 	formatAutopostRaceControlMessage,
+	isRecentRaceControlMessage,
 	shouldAutopostRaceControlMessage,
 } from "~/live-timing";
 
@@ -58,7 +59,9 @@ const jobHandlers: Record<JobType, () => Promise<unknown>> = {
 		if (channels.length === 0) return;
 
 		const { session, messages } = await fetchCurrentSessionRaceControlMessages();
-		const relevantMessages = messages.filter(shouldAutopostRaceControlMessage);
+		const relevantMessages = messages.filter((message) => {
+			return shouldAutopostRaceControlMessage(message) && isRecentRaceControlMessage(message);
+		});
 		if (relevantMessages.length === 0) return;
 
 		const seenKeys = await getSeenAutopostMessageKeys(session.Path);
