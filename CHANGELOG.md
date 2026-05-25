@@ -1,3 +1,10 @@
+## [1.5.13](https://github.com/obviyus/HamVerBot/compare/v1.5.12...v1.5.13) (2026-05-25)
+
+
+### Bug Fixes
+
+* **autopost:** ignore stale OpenF1 race control messages ([4cd9979](https://github.com/obviyus/HamVerBot/commit/4cd9979dcf8106a3769a17e10ec1e28ceb5d3d27))
+
 ## [1.5.12](https://github.com/obviyus/HamVerBot/compare/v1.5.11...v1.5.12) (2026-05-25)
 
 
