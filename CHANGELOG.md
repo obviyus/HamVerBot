@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/obviyus/HamVerBot/compare/v1.6.0...v1.6.1) (2026-05-25)
+
+
+### Bug Fixes
+
+* **irc:** simplify winner command scope ([e6bca28](https://github.com/obviyus/HamVerBot/commit/e6bca28be512904890d99d14fe96c2740f8b33c9))
+
 # [1.6.0](https://github.com/obviyus/HamVerBot/compare/v1.5.15...v1.6.0) (2026-05-25)
 
 ### Features
