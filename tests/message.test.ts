@@ -372,10 +372,7 @@ describe("handleIrcMessage", () => {
 		});
 
 		expect(setPredictionWinnersMock).toHaveBeenCalledWith("#fn", ["obviyus", "tomf", "ordos"]);
-		expect(sendMessageMock).toHaveBeenCalledWith(
-			"#fn",
-			"Voiced prediction winners: obviyus, tomf, ordos",
-		);
+		expect(sendMessageMock).not.toHaveBeenCalled();
 	});
 
 	test("rejects prediction winners from non-whitelisted users", async () => {
@@ -397,7 +394,7 @@ describe("handleIrcMessage", () => {
 		});
 
 		expect(setPredictionWinnersMock).toHaveBeenCalledWith("#f1", ["obviyus"]);
-		expect(sendMessageMock).toHaveBeenCalledWith("#f1", "Voiced prediction winner: obviyus");
+		expect(sendMessageMock).not.toHaveBeenCalled();
 	});
 
 	test("rejects prediction winners in private messages", async () => {

@@ -84,7 +84,8 @@ async function getNextEventMessage(eventType?: EventType, timezone?: number): Pr
 	return `\x02${eventName}\x02 begins in ${timeLeftString}`;
 }
 
-type CommandHandler = (args: string[], context: CommandContext) => Promise<string>;
+type CommandResponse = string | undefined;
+type CommandHandler = (args: string[], context: CommandContext) => Promise<CommandResponse>;
 const WINNER_COMMAND_USERS = new Set(["obviyus", "tomf", "ordos"]);
 
 function withErrorReply(
@@ -213,7 +214,6 @@ const commandHandlers: Record<string, CommandHandler> = {
 			}
 
 			setPredictionWinners(context.target, winners);
-			return `Voiced prediction winner${winners.length === 1 ? "" : "s"}: ${winners.join(", ")}`;
 		},
 	),
 
@@ -245,7 +245,9 @@ export async function handleIrcMessage(message: string, context: CommandContext)
 
 	try {
 		const response = await handler(args.slice(1), context);
-		sendMessage(context.target, response);
+		if (response !== undefined) {
+			sendMessage(context.target, response);
+		}
 	} catch (error) {
 		console.error(`Error handling command ${command}:`, error);
 	}
