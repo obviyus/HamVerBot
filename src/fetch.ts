@@ -21,11 +21,12 @@ import {
 	isLiveTimingAccessDenied,
 	readOpenF1CurrentEvent,
 } from "./openf1";
+import config from "./config";
 
 type CurrentConstructorStandings = { MRData: ConstructorMRData };
 type CurrentDriverStandings = { MRData: DriverMRData };
 
-const F1_SESSION_ENDPOINT = "https://livetiming.formula1.com/static";
+const F1_SESSION_ENDPOINT = config.liveTiming.staticBaseUrl;
 const ERGAST_API_ENDPOINT = "https://api.jolpi.ca/ergast/f1";
 const SESSION_KEY_ALIASES: Record<string, string> = {
 	practice1: "fp1",

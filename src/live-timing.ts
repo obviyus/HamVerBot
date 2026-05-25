@@ -1,4 +1,5 @@
 import * as signalR from "@microsoft/signalr";
+import config from "./config";
 import {
 	fetchLiveTimingJson,
 	fetchOpenF1MeetingName,
@@ -12,7 +13,7 @@ import {
 	type OpenF1Session,
 } from "./openf1";
 
-const F1_STATIC_ENDPOINT = "https://livetiming.formula1.com/static";
+const F1_STATIC_ENDPOINT = config.liveTiming.staticBaseUrl;
 const F1_SIGNALR_ENDPOINT = "https://livetiming.formula1.com/signalrcore";
 const AUTOPOST_RACE_CONTROL_WINDOW_MS = 5 * 60 * 1000;
 

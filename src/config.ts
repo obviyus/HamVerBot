@@ -22,10 +22,19 @@ export interface DatabaseConfig {
 	authToken: string;
 }
 
+export interface LiveTimingConfig {
+	staticBaseUrl: string;
+}
+
 export interface AppConfig {
 	irc: IRCConfig;
 	database: DatabaseConfig;
+	liveTiming: LiveTimingConfig;
 	isDevelopment: boolean;
+}
+
+function cleanBaseUrl(url: string): string {
+	return url.replace(/\/+$/, "");
 }
 
 export function loadConfig(): AppConfig {
@@ -51,6 +60,11 @@ export function loadConfig(): AppConfig {
 		database: {
 			url: process.env.TURSO_DATABASE_URL || "",
 			authToken: process.env.TURSO_AUTH_TOKEN || "",
+		},
+		liveTiming: {
+			staticBaseUrl: cleanBaseUrl(
+				process.env.F1_STATIC_BASE_URL || "https://livetiming.formula1.com/static",
+			),
 		},
 		isDevelopment,
 	};
