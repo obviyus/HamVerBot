@@ -211,4 +211,31 @@ describe("database module", () => {
 			"write",
 		);
 	});
+
+	test("upserts stored session results by path", async () => {
+		executeMock.mockImplementation(async (query) => {
+			if (typeof query === "string" && query.includes("SELECT COUNT(*) as count FROM event_type")) {
+				return { rows: [{ count: 1 }] };
+			}
+
+			return { rows: [] };
+		});
+
+		const database = await loadDatabaseModule();
+		await database.storeEventResult(42, "openf1/11291/", {
+			title: "Canadian Grand Prix: Race",
+			standings: [],
+		});
+
+		const objectCalls = executeMock.mock.calls.map(([query]) => query).filter(hasSqlQuery);
+		expect(
+			objectCalls.some((query) => {
+				return (
+					query.sql.includes("ON CONFLICT(path) DO UPDATE SET") &&
+					query.args?.[0] === 42 &&
+					query.args?.[1] === "openf1/11291/"
+				);
+			}),
+		).toBe(true);
+	});
 });

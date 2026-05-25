@@ -145,6 +145,7 @@ describe("fetchDriverList", () => {
 						meeting_key: 1,
 						session_key: 7782,
 						session_name: "Practice 2",
+						session_type: "Practice",
 						year: 2026,
 					},
 				]);
@@ -217,6 +218,7 @@ describe("readCurrentEvent", () => {
 						meeting_key: 1,
 						session_key: 7782,
 						session_name: "Practice 2",
+						session_type: "Practice",
 						year: 2026,
 					},
 				]);
@@ -473,7 +475,7 @@ describe("fetchResults", () => {
 		expect(storeEventResultMock).not.toHaveBeenCalled();
 	});
 
-	test("fetches OpenF1 session results when live timing returns 403", async () => {
+	test("fetches OpenF1 race results when live timing returns 403", async () => {
 		dbExecuteMock.mockImplementation(async (query: unknown) => {
 			if (typeof query === "object" && query && "sql" in query) {
 				const sql = String(query.sql);
@@ -498,12 +500,13 @@ describe("fetchResults", () => {
 			if (url.startsWith(`${OPENF1_ENDPOINT}/sessions?`)) {
 				return jsonResponse([
 					{
-						date_end: "2026-03-07T02:00:00+00:00",
-						date_start: "2026-03-07T01:00:00+00:00",
-						location: "Australian",
-						meeting_key: 1,
-						session_key: 7782,
-						session_name: "Practice 2",
+						date_end: "2026-05-24T22:00:00+00:00",
+						date_start: "2026-05-24T20:00:00+00:00",
+						location: "Montréal",
+						meeting_key: 1285,
+						session_key: 11291,
+						session_name: "Race",
+						session_type: "Race",
 						year: 2026,
 					},
 				]);
@@ -512,8 +515,28 @@ describe("fetchResults", () => {
 			if (url.startsWith(`${OPENF1_ENDPOINT}/drivers?`)) {
 				return jsonResponse([
 					{
+						broadcast_name: "K ANTONELLI",
+						driver_number: 12,
+						first_name: "Kimi",
+						full_name: "Kimi ANTONELLI",
+						last_name: "Antonelli",
+						name_acronym: "ANT",
+						team_colour: "00D7B6",
+						team_name: "Mercedes",
+					},
+					{
+						broadcast_name: "L HAMILTON",
+						driver_number: 44,
+						first_name: "Lewis",
+						full_name: "Lewis HAMILTON",
+						last_name: "Hamilton",
+						name_acronym: "HAM",
+						team_colour: "E80020",
+						team_name: "Ferrari",
+					},
+					{
 						broadcast_name: "M VERSTAPPEN",
-						driver_number: 1,
+						driver_number: 3,
 						first_name: "Max",
 						full_name: "Max VERSTAPPEN",
 						last_name: "Verstappen",
@@ -522,16 +545,158 @@ describe("fetchResults", () => {
 						team_name: "Red Bull Racing",
 					},
 					{
-						broadcast_name: "O PIASTRI",
-						driver_number: 81,
-						first_name: "Oscar",
-						full_name: "Oscar PIASTRI",
-						last_name: "Piastri",
-						name_acronym: "PIA",
-						team_colour: "FF8000",
-						team_name: "McLaren",
+						broadcast_name: "S PEREZ",
+						driver_number: 11,
+						first_name: "Sergio",
+						full_name: "Sergio PEREZ",
+						last_name: "Perez",
+						name_acronym: "PER",
+						team_colour: "4781D7",
+						team_name: "Red Bull Racing",
 					},
 				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/meetings?`)) {
+				return jsonResponse([{ meeting_name: "Canadian Grand Prix" }]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/session_result?`)) {
+				return jsonResponse([
+					{
+						dnf: true,
+						dns: false,
+						dsq: false,
+						driver_number: 11,
+						duration: null,
+						gap_to_leader: null,
+						position: null,
+					},
+					{
+						dnf: false,
+						dns: false,
+						dsq: false,
+						driver_number: 12,
+						duration: 5295.758,
+						gap_to_leader: 0,
+						position: 1,
+					},
+					{
+						dnf: false,
+						dns: false,
+						dsq: false,
+						driver_number: 44,
+						duration: 5306.526,
+						gap_to_leader: 10.768,
+						position: 2,
+					},
+					{
+						dnf: false,
+						dns: false,
+						dsq: false,
+						driver_number: 3,
+						duration: 5307.034,
+						gap_to_leader: 11.276,
+						position: 3,
+					},
+				]);
+			}
+
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		expect(fetchResults("openf1/11291/")).resolves.toBe(
+			"🏎️ \x02Canadian Grand Prix: Race Results\x02: 1. ANT - \x0303[1:28:15.758]\x03 2. HAM - \x0303[+10.768]\x03 3. VER - \x0303[+11.276]\x03",
+		);
+		expect(storeEventResultMock).toHaveBeenCalledWith(
+			44,
+			"openf1/11291/",
+			expect.objectContaining({ title: "Canadian Grand Prix: Race" }),
+		);
+	});
+
+	test("refreshes invalid cached OpenF1 qualifying arrays as lap times", async () => {
+		dbExecuteMock.mockImplementation(async (query: unknown) => {
+			if (typeof query === "object" && query && "sql" in query) {
+				const sql = String(query.sql);
+				if (sql.includes("FROM results r")) {
+					return {
+						rows: [
+							{
+								meeting_name: "Canadian Grand Prix",
+								event_type_name: "Qualifying",
+								data: JSON.stringify({
+									title: "Canadian Grand Prix: Qualifying",
+									standings: [
+										{
+											position: 1,
+											driverName: "RUS",
+											teamName: "Mercedes",
+											time: "0.573,0.104,0",
+										},
+									],
+								}),
+							},
+						],
+					};
+				}
+
+				if (sql.includes("AND start_time BETWEEN")) {
+					return { rows: [{ id: 45 }] };
+				}
+			}
+
+			return { rows: [] };
+		});
+
+		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+			const url = requestUrl(input);
+			if (url.endsWith("/TimingDataF1.json")) {
+				return new Response(null, { status: 403 });
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/sessions?`)) {
+				return jsonResponse([
+					{
+						date_end: "2026-05-23T21:00:00+00:00",
+						date_start: "2026-05-23T20:00:00+00:00",
+						location: "Montréal",
+						meeting_key: 1285,
+						session_key: 11287,
+						session_name: "Qualifying",
+						session_type: "Qualifying",
+						year: 2026,
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/drivers?`)) {
+				return jsonResponse([
+					{
+						broadcast_name: "G RUSSELL",
+						driver_number: 63,
+						first_name: "George",
+						full_name: "George RUSSELL",
+						last_name: "Russell",
+						name_acronym: "RUS",
+						team_colour: "00D7B6",
+						team_name: "Mercedes",
+					},
+					{
+						broadcast_name: "K ANTONELLI",
+						driver_number: 12,
+						first_name: "Kimi",
+						full_name: "Kimi ANTONELLI",
+						last_name: "Antonelli",
+						name_acronym: "ANT",
+						team_colour: "00D7B6",
+						team_name: "Mercedes",
+					},
+				]);
+			}
+
+			if (url.startsWith(`${OPENF1_ENDPOINT}/meetings?`)) {
+				return jsonResponse([{ meeting_name: "Canadian Grand Prix" }]);
 			}
 
 			if (url.startsWith(`${OPENF1_ENDPOINT}/session_result?`)) {
@@ -540,18 +705,18 @@ describe("fetchResults", () => {
 						dnf: false,
 						dns: false,
 						dsq: false,
-						driver_number: 81,
-						duration: 77.727,
-						gap_to_leader: 0,
+						driver_number: 63,
+						duration: [73.953, 73.079, 72.578],
+						gap_to_leader: [0.573, 0.104, 0],
 						position: 1,
 					},
 					{
 						dnf: false,
 						dns: false,
 						dsq: false,
-						driver_number: 1,
-						duration: 77.938,
-						gap_to_leader: 0.211,
+						driver_number: 12,
+						duration: [73.38, 73.076, 72.646],
+						gap_to_leader: [0, 0.101, 0.068],
 						position: 2,
 					},
 				]);
@@ -560,13 +725,13 @@ describe("fetchResults", () => {
 			throw new Error(`Unexpected URL: ${url}`);
 		});
 
-		expect(fetchResults("openf1/7782/")).resolves.toBe(
-			"🏎️ \x02Australian Grand Prix: Practice 2 Results\x02: 1. PIA - \x0303[1:17.727]\x03 2. VER - \x0303[+0.211]\x03",
+		expect(fetchResults("openf1/11287/")).resolves.toBe(
+			"🏎️ \x02Canadian Grand Prix: Qualifying Results\x02: 1. RUS - \x0303[1:12.578]\x03 2. ANT - \x0303[1:12.646]\x03",
 		);
 		expect(storeEventResultMock).toHaveBeenCalledWith(
-			44,
-			"openf1/7782/",
-			expect.objectContaining({ title: "Australian Grand Prix: Practice 2" }),
+			45,
+			"openf1/11287/",
+			expect.objectContaining({ title: "Canadian Grand Prix: Qualifying" }),
 		);
 	});
 });

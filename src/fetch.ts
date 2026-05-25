@@ -174,6 +174,17 @@ function eventTypeFromSession(path: string, sessionName = ""): number | null {
 	return eventType;
 }
 
+function hasInvalidResultCache(sessionResult: SessionResults): boolean {
+	return sessionResult.standings.some((standing) => {
+		return (
+			typeof standing.position !== "number" ||
+			!Number.isFinite(standing.position) ||
+			standing.time.includes(",") ||
+			/^\d+(?:\.\d+)?s$/.test(standing.time)
+		);
+	});
+}
+
 export async function fetchResults(path: string): Promise<string> {
 	console.log(`Fetching results for ${path}...`);
 	const db = await getDb();
@@ -203,10 +214,16 @@ export async function fetchResults(path: string): Promise<string> {
 					throw new Error("Cached result metadata is invalid");
 				}
 				const data = JSON.parse(row.data as string) as SessionResults;
-				sessionResult = {
+				const cachedResult = {
 					...data,
 					title: `${row.meeting_name}: ${row.event_type_name}`,
 				};
+				if (hasInvalidResultCache(cachedResult)) {
+					console.warn(`Cached result data is invalid for ${path}, fetching fresh data`);
+					sessionResult = await fetchFreshResults(path);
+				} else {
+					sessionResult = cachedResult;
+				}
 			} catch (parseError) {
 				console.error("Error parsing cached results, fetching fresh data:", parseError);
 				sessionResult = await fetchFreshResults(path);
@@ -305,7 +322,7 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 
 		const openF1Result = await fetchOpenF1SessionResultData(path);
 		const session = openF1Result.session;
-		meetingName = `${session.location} Grand Prix`;
+		meetingName = openF1Result.meetingName;
 		sessionStartTime = Math.floor(Date.parse(session.date_start) / 1000);
 		eventType = eventTypeFromSession(path, session.session_name);
 		sessionResult = openF1Result.results;

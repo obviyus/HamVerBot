@@ -37,7 +37,12 @@ export interface OpenF1Session {
 	meeting_key: number;
 	session_key: number;
 	session_name: string;
+	session_type: string;
 	year: number;
+}
+
+interface OpenF1Meeting {
+	meeting_name: string;
 }
 
 export interface OpenF1RaceControlMessage {
@@ -89,7 +94,7 @@ interface OpenF1SessionResult {
 	driver_number: number;
 	duration: number | Array<number | null> | null;
 	gap_to_leader: number | string | Array<number | string | null> | null;
-	position: number;
+	position: number | null;
 }
 
 function cleanJson(text: string): unknown {
@@ -228,8 +233,8 @@ export function openF1SessionKeyFromPath(path: string): number | null {
 	return match ? Number.parseInt(match[1], 10) : null;
 }
 
-export function openF1SessionTitle(session: OpenF1Session): string {
-	return `${session.location} Grand Prix: ${session.session_name}`;
+export function openF1SessionTitle(session: OpenF1Session, meetingName?: string): string {
+	return `${meetingName ?? `${session.location} Grand Prix`}: ${session.session_name}`;
 }
 
 export async function fetchOpenF1CurrentSession(): Promise<OpenF1Session> {
@@ -362,21 +367,47 @@ function scalarResultValue<T>(value: T | Array<T | null> | null): T | null {
 	return null;
 }
 
+function minResultDuration(value: number | Array<number | null> | null): number | null {
+	if (!Array.isArray(value)) return value;
+	let best: number | null = null;
+	for (const item of value) {
+		if (item === null) continue;
+		if (best === null || item < best) {
+			best = item;
+		}
+	}
+	return best;
+}
+
 function formatSeconds(seconds: number): string {
 	const wholeSeconds = Math.floor(seconds);
 	const millis = Math.round((seconds - wholeSeconds) * 1000);
-	const minutes = Math.floor(wholeSeconds / 60);
+	const hours = Math.floor(wholeSeconds / 3600);
+	const minutes = Math.floor((wholeSeconds % 3600) / 60);
 	const remainingSeconds = wholeSeconds % 60;
+	if (hours > 0) {
+		return `${hours}:${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}.${millis.toString().padStart(3, "0")}`;
+	}
 	return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}.${millis.toString().padStart(3, "0")}`;
 }
 
-function formatOpenF1ResultTime(result: OpenF1SessionResult): string {
+function formatOpenF1ResultTime(result: OpenF1SessionResult, session: OpenF1Session): string {
 	if (result.dsq) return "DSQ";
 	if (result.dns) return "DNS";
 	if (result.dnf) return "DNF";
 
+	if (session.session_type !== "Race") {
+		const duration = minResultDuration(result.duration);
+		return typeof duration === "number" ? formatSeconds(duration) : "";
+	}
+
+	if (result.position === 1) {
+		const duration = scalarResultValue(result.duration);
+		return typeof duration === "number" ? formatSeconds(duration) : "";
+	}
+
 	const gap = scalarResultValue(result.gap_to_leader);
-	if (result.position !== 1 && gap !== null) {
+	if (gap !== null) {
 		return typeof gap === "number" ? `+${gap.toFixed(3)}` : gap;
 	}
 
@@ -386,18 +417,24 @@ function formatOpenF1ResultTime(result: OpenF1SessionResult): string {
 
 export async function fetchOpenF1SessionResultData(
 	path: string,
-): Promise<{ session: OpenF1Session; results: SessionResults }> {
+): Promise<{ session: OpenF1Session; meetingName: string; results: SessionResults }> {
 	const session = await resolveOpenF1Session(path);
-	const [driverRows, results] = await Promise.all([
+	const [driverRows, meetingRows, results] = await Promise.all([
 		fetchOpenF1Json<OpenF1Driver[]>("drivers", { session_key: String(session.session_key) }),
+		fetchOpenF1Json<OpenF1Meeting[]>("meetings", { meeting_key: String(session.meeting_key) }),
 		fetchOpenF1Json<OpenF1SessionResult[]>("session_result", {
 			session_key: String(session.session_key),
 		}),
 	]);
 
+	const meeting = meetingRows[0];
+	const meetingName = meeting?.meeting_name ?? `${session.location} Grand Prix`;
 	const drivers = openF1Drivers(driverRows);
 	const driversByNumber = new Map(drivers.map((driver) => [driver.racingNumber, driver]));
 	const standings: DriverStanding[] = results
+		.filter((result): result is OpenF1SessionResult & { position: number } => {
+			return typeof result.position === "number";
+		})
 		.toSorted((left, right) => left.position - right.position)
 		.flatMap((result) => {
 			const driver = driversByNumber.get(result.driver_number);
@@ -408,15 +445,16 @@ export async function fetchOpenF1SessionResultData(
 					position: result.position,
 					driverName: driver.tla,
 					teamName: driver.teamName,
-					time: formatOpenF1ResultTime(result),
+					time: formatOpenF1ResultTime(result, session),
 				},
 			];
 		});
 
 	return {
 		session,
+		meetingName,
 		results: {
-			title: openF1SessionTitle(session),
+			title: openF1SessionTitle(session, meetingName),
 			standings,
 		},
 	};

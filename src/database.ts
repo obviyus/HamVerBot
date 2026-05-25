@@ -362,7 +362,12 @@ export async function storeEventResult(eventId: number, path: string, data: obje
 	try {
 		const db = await getDb();
 		await db.execute({
-			sql: "INSERT INTO results (event_id, path, data) VALUES (?, ?, json(?))",
+			sql: `INSERT INTO results (event_id, path, data)
+				VALUES (?, ?, json(?))
+				ON CONFLICT(path) DO UPDATE SET
+					event_id = excluded.event_id,
+					data = json(excluded.data),
+					create_time = unixepoch()`,
 			args: [eventId, path, JSON.stringify(data)],
 		});
 	} catch (error) {

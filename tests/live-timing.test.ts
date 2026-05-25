@@ -407,6 +407,7 @@ describe("live timing fetchers", () => {
 						meeting_key: 1,
 						session_key: 7782,
 						session_name: "Race",
+						session_type: "Race",
 						year: 2026,
 					},
 				]);
@@ -466,6 +467,7 @@ describe("live timing fetchers", () => {
 						meeting_key: 1,
 						session_key: 7782,
 						session_name: "Practice 2",
+						session_type: "Practice",
 						year: 2026,
 					},
 				]);
@@ -508,6 +510,7 @@ describe("live timing fetchers", () => {
 						meeting_key: 1,
 						session_key: 7782,
 						session_name: "Race",
+						session_type: "Race",
 						year: 2026,
 					},
 				]);
