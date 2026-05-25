@@ -1,3 +1,10 @@
+## [1.5.14](https://github.com/obviyus/HamVerBot/compare/v1.5.13...v1.5.14) (2026-05-25)
+
+
+### Bug Fixes
+
+* **live-timing:** allow configurable static endpoint ([49fe67a](https://github.com/obviyus/HamVerBot/commit/49fe67a08d87de259ff6a60c111b5d03d7665ab4))
+
 ## [1.5.13](https://github.com/obviyus/HamVerBot/compare/v1.5.12...v1.5.13) (2026-05-25)
 
 
