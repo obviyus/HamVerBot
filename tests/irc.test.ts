@@ -75,7 +75,6 @@ void mock.module("irc-framework", () => ({
 }));
 
 const {
-	attemptManualReconnect,
 	broadcast,
 	getClient,
 	initIrcClient,
@@ -124,6 +123,7 @@ describe("IRC client", () => {
 			tls: true,
 			outgoing_addr: "0.0.0.0",
 		});
+		expect(client.connectCalls[0]?.auto_reconnect).toBeUndefined();
 	});
 
 	test("dispatches channel and private commands with context", async () => {
@@ -411,9 +411,7 @@ describe("IRC client", () => {
 		mathRandomSpy.mockRestore();
 	});
 
-	test("re-registers join callback on reconnect", async () => {
-		getAllChannelsMock.mockResolvedValue(["#db"]);
-
+	test("exits when the IRC socket closes", async () => {
 		await initIrcClient({
 			server: "irc.libera.chat",
 			port: 6697,
@@ -422,50 +420,12 @@ describe("IRC client", () => {
 			channels: ["#f1"],
 		});
 
+		const exitSpy = spyOn(process, "exit").mockImplementation((code) => {
+			throw new Error(`exit:${code}`);
+		});
 		const client = getClient() as unknown as FakeClient;
-		client.emit("registered");
-		await Promise.resolve();
-		await Promise.resolve();
-		expect(client.joinCalls).toEqual(["#f1", "#db"]);
 
-		client.joinCalls.length = 0;
-		client.connected = false;
-		client.emit("socket close", { message: "closed" });
-		client.emit("reconnecting", { wait: 5000 });
-		client.emit("registered");
-		await Promise.resolve();
-		await Promise.resolve();
-
-		expect(client.joinCalls).toEqual(["#f1", "#db"]);
-	});
-
-	test("attemptManualReconnect short-circuits when already connected", async () => {
-		await initIrcClient({
-			server: "irc.libera.chat",
-			port: 6697,
-			nickname: "HamVerBot",
-			secure: true,
-			channels: ["#f1"],
-		});
-
-		expect(attemptManualReconnect()).resolves.toBe(true);
-		expect(FakeClient.instances).toHaveLength(1);
-	});
-
-	test("attemptManualReconnect creates a new client when disconnected", async () => {
-		await initIrcClient({
-			server: "irc.libera.chat",
-			port: 6697,
-			nickname: "HamVerBot",
-			secure: true,
-			channels: ["#f1"],
-		});
-
-		const client = getClient() as unknown as FakeClient;
-		client.connected = false;
-
-		expect(attemptManualReconnect()).resolves.toBe(true);
-		expect(FakeClient.instances).toHaveLength(2);
-		expect(FakeClient.instances[1]?.connectCalls).toHaveLength(1);
+		expect(() => client.emit("socket close", { message: "closed" })).toThrow("exit:1");
+		expect(exitSpy).toHaveBeenCalledWith(1);
 	});
 });

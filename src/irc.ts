@@ -131,9 +131,6 @@ function createAndConnectClient(config: IrcClientConfig): Client {
 		enable_echomessage: false,
 		ping_interval: 15,
 		ping_timeout: 60,
-		auto_reconnect: true,
-		auto_reconnect_max_retries: 30,
-		auto_reconnect_max_wait: 30000,
 		account: hasConfiguredNickPassword(config.nickPassword)
 			? { account: config.nickname, password: config.nickPassword }
 			: undefined,
@@ -331,8 +328,8 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 	});
 
 	client.on("close", () => {
-		console.log("Connection closed. Attempting to reconnect...");
-		resetConnectionState();
+		console.error("IRC connection closed; exiting for supervisor restart");
+		process.exit(1);
 	});
 
 	client.on("socket close", (err: unknown) => {
@@ -349,17 +346,8 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 			"Connection status after socket close:",
 			client.connected ? "Still connected" : "Disconnected",
 		);
-		console.log("Auto reconnect is enabled, will attempt to reconnect shortly...");
-	});
-
-	client.on("reconnecting", (opts: unknown) => {
-		const options = opts as { wait: number };
-		console.log(`Reconnecting to IRC server in ${options.wait / 1000} seconds...`);
-		shouldJoinOnReady = true;
-	});
-
-	client.on("connected", () => {
-		console.log("Successfully reconnected to IRC server");
+		console.error("IRC socket closed; exiting for supervisor restart");
+		process.exit(1);
 	});
 
 	client.on("ping timeout", () => {
@@ -481,39 +469,4 @@ function authenticateWithNickServ(nickname: string, password: string): void {
 
 export function sendMessage(channel: string, message: string): void {
 	sendWithLogging(channel, message);
-}
-
-export async function attemptManualReconnect(): Promise<boolean> {
-	console.log("Attempting manual reconnection to IRC server...");
-
-	if (!ircClient) {
-		console.error("Cannot reconnect: IRC client not initialized");
-		return false;
-	}
-
-	try {
-		if (ircClient.connected) {
-			console.log("Already connected, no need to reconnect");
-			return true;
-		}
-
-		const { irc } = appConfig;
-		createAndConnectClient({
-			server: irc.server,
-			port: irc.port,
-			nickname: irc.nickname,
-			username: irc.nickname,
-			realname: irc.realname,
-			password: irc.password,
-			nickPassword: irc.nickPassword,
-			secure: irc.useTls,
-			channels: irc.channels,
-		});
-
-		console.log("Manual reconnection initiated");
-		return true;
-	} catch (error) {
-		console.error("Manual reconnection failed:", error);
-		return false;
-	}
 }
