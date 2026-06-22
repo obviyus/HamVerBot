@@ -22,6 +22,12 @@
 - `!prev` - Get results from the last completed event
 - `!drivers` - Current WDC (World Drivers' Championship) standings
 - `!constructors` - Current WCC (World Constructors' Championship) standings
+- `!h2h VER HAM` - Compare two drivers head-to-head this season
+- `!weather` - Current live timing weather
+- `!stints` - Current tyre stints
+- `!enable autopost` - Enable race-control autoposts in the current channel (owners only)
+- `!winner nick [nick ...]` - Voice prediction winners in the current channel (prediction admins only)
+- `!ping` - Health check
 - `!help` - List all available commands
 
 ### Automated Updates 🤖
