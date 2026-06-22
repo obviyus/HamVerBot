@@ -24,6 +24,7 @@ const stringMap: Array<[string, EventType]> = [
 	["qualifying", EventType.Qualifying],
 	["sprint race", EventType.Sprint],
 	["livery", EventType.LiveryReveal],
+	["grand prix", EventType.Race],
 	["fp1", EventType.FreePractice1],
 	["fp2", EventType.FreePractice2],
 	["fp3", EventType.FreePractice3],
@@ -60,8 +61,10 @@ export function eventTypeToEmoji(eventType: EventType): string {
 }
 
 export function stringToEventType(str?: string): EventType | undefined {
-	const lower = str?.toLowerCase();
-	return lower ? stringMap.find(([key]) => lower.includes(key))?.[1] : undefined;
+	const lower = str?.toLowerCase().trim();
+	return lower
+		? stringMap.find(([key]) => (key.length === 1 ? lower === key : lower.includes(key)))?.[1]
+		: undefined;
 }
 
 export function sessionKeyToEventType(key: string): EventType | null {

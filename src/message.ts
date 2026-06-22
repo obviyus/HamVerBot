@@ -24,7 +24,10 @@ interface CommandContext {
 	isPrivate: boolean;
 }
 
-function parseTimezone(arg?: string): number | undefined {
+const INVALID_TIMEZONE_MESSAGE = "Invalid timezone. Use an offset like utc+1 or gmt-5:30.";
+const WHEN_USAGE_MESSAGE = "Usage: !when fp1|fp2|fp3|qualifying|sprint|race [timezone]";
+
+function parseTimezone(arg?: string): number | null | undefined {
 	if (!arg) return undefined;
 
 	const normalized = arg.toLowerCase();
@@ -33,16 +36,17 @@ function parseTimezone(arg?: string): number | undefined {
 	if (offset === "") return 0;
 
 	const match = /^([+-]?)(\d{1,2})(?::(\d{1,2}))?$/.exec(offset);
-	if (!match) return undefined;
+	if (!match) return null;
 
 	const sign = match[1] === "-" ? -1 : 1;
-	const hours = Number.parseInt(match[2], 10) * sign;
+	const hours = Number.parseInt(match[2], 10);
 	const minutes = Number.parseInt(match[3] || "0", 10);
-	if (hours < -12 || hours > 14 || minutes < 0 || minutes > 59) {
-		return undefined;
+	const totalMinutes = (hours * 60 + minutes) * sign;
+	if (totalMinutes < -12 * 60 || totalMinutes > 14 * 60 || minutes < 0 || minutes > 59) {
+		return null;
 	}
 
-	return hours * 60 + minutes * sign;
+	return totalMinutes;
 }
 
 async function getNextEventMessage(eventType?: EventType, timezone?: number): Promise<string> {
@@ -55,8 +59,9 @@ async function getNextEventMessage(eventType?: EventType, timezone?: number): Pr
 	const eventDate = new Date(event.startTime * 1000);
 	if (timezone !== undefined) {
 		const localTime = new Date(eventDate.getTime() + timezone * 60 * 1000);
-		const tzHours = Math.abs(Math.floor(timezone / 60));
-		const tzMinutes = Math.abs(timezone % 60);
+		const absoluteTimezone = Math.abs(timezone);
+		const tzHours = Math.floor(absoluteTimezone / 60);
+		const tzMinutes = absoluteTimezone % 60;
 		const tzSign = timezone >= 0 ? "+" : "-";
 		const tzStr = `${tzSign}${tzHours.toString().padStart(2, "0")}:${tzMinutes.toString().padStart(2, "0")}`;
 		const dateStr = localTime.toUTCString().split(" ").slice(0, 3).join(" ");
@@ -104,9 +109,19 @@ function withErrorReply(
 const commandHandlers: Record<string, CommandHandler> = {
 	ping: async () => "pong",
 
-	next: async (args) => getNextEventMessage(undefined, parseTimezone(args[0])),
+	next: async (args) => {
+		const timezone = parseTimezone(args[0]);
+		if (timezone === null) return INVALID_TIMEZONE_MESSAGE;
+		return getNextEventMessage(undefined, timezone);
+	},
 
-	when: async (args) => getNextEventMessage(stringToEventType(args[0]), parseTimezone(args[1])),
+	when: async (args) => {
+		const eventType = stringToEventType(args[0]);
+		if (eventType === undefined) return WHEN_USAGE_MESSAGE;
+		const timezone = parseTimezone(args[1]);
+		if (timezone === null) return INVALID_TIMEZONE_MESSAGE;
+		return getNextEventMessage(eventType, timezone);
+	},
 
 	prev: withErrorReply("Error fetching results", "Failed to fetch results.", async () => {
 		const path = await getLatestPath();

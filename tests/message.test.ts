@@ -200,6 +200,39 @@ describe("handleIrcMessage", () => {
 		);
 	});
 
+	test("returns next event in negative half-hour timezone", async () => {
+		getNextEventMock.mockResolvedValue({
+			meetingName: "Bahrain Grand Prix",
+			eventType: 7,
+			startTime: Math.floor(Date.UTC(2026, 3, 12, 15, 0, 0) / 1000),
+		});
+
+		await handleIrcMessage("next gmt-5:30", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(sendMessageMock).toHaveBeenCalledWith(
+			"#f1",
+			"\x02🏎️ Bahrain Grand Prix: Race\x02 starts on Sun, 12 Apr at 09:30 UTC-05:30",
+		);
+	});
+
+	test("rejects invalid next event timezone", async () => {
+		await handleIrcMessage("next utc+99", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(getNextEventMock).not.toHaveBeenCalled();
+		expect(sendMessageMock).toHaveBeenCalledWith(
+			"#f1",
+			"Invalid timezone. Use an offset like utc+1 or gmt-5:30.",
+		);
+	});
+
 	test("filters next event by requested type", async () => {
 		getNextEventMock.mockResolvedValue({
 			meetingName: "British Grand Prix",
@@ -220,10 +253,24 @@ describe("handleIrcMessage", () => {
 		);
 	});
 
+	test("rejects invalid when event type", async () => {
+		await handleIrcMessage("when karaoke", {
+			target: "#f1",
+			nick: "obviyus",
+			isPrivate: false,
+		});
+
+		expect(getNextEventMock).not.toHaveBeenCalled();
+		expect(sendMessageMock).toHaveBeenCalledWith(
+			"#f1",
+			"Usage: !when fp1|fp2|fp3|qualifying|sprint|race [timezone]",
+		);
+	});
+
 	test("returns no upcoming events when calendar is empty", async () => {
 		getNextEventMock.mockResolvedValue(null);
 
-		await handleIrcMessage("next utc+99", {
+		await handleIrcMessage("next", {
 			target: "#f1",
 			nick: "obviyus",
 			isPrivate: false,

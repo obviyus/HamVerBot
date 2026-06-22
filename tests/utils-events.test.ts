@@ -22,6 +22,9 @@ describe("events utils", () => {
 		expect(stringToEventType("sprint shootout")).toBe(EventType.SprintQualifying);
 		expect(stringToEventType("sprint race")).toBe(EventType.Sprint);
 		expect(stringToEventType("grand prix")).toBe(EventType.Race);
+		expect(stringToEventType("q")).toBe(EventType.Qualifying);
+		expect(stringToEventType("r")).toBe(EventType.Race);
+		expect(stringToEventType("karaoke")).toBeUndefined();
 		expect(stringToEventType("unknown")).toBeUndefined();
 	});
 
