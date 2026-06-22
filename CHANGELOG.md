@@ -1,3 +1,10 @@
+## [1.6.4](https://github.com/obviyus/HamVerBot/compare/v1.6.3...v1.6.4) (2026-06-22)
+
+
+### Bug Fixes
+
+* **irc:** validate event command input ([1bfeada](https://github.com/obviyus/HamVerBot/commit/1bfeada2c3044c4b11f0f0819dfb151543401abe))
+
 ## [1.6.3](https://github.com/obviyus/HamVerBot/compare/v1.6.2...v1.6.3) (2026-06-21)
 
 
