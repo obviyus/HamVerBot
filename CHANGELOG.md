@@ -7,10 +7,9 @@
 
 ## [1.6.2](https://github.com/obviyus/HamVerBot/compare/v1.6.1...v1.6.2) (2026-05-25)
 
-
 ### Bug Fixes
 
-* **irc:** silence winner success reply ([77e1048](https://github.com/obviyus/HamVerBot/commit/77e104827189d45128a99eea79876e25a66c4ef7))
+- **irc:** silence winner success reply ([77e1048](https://github.com/obviyus/HamVerBot/commit/77e104827189d45128a99eea79876e25a66c4ef7))
 
 ## [1.6.1](https://github.com/obviyus/HamVerBot/compare/v1.6.0...v1.6.1) (2026-05-25)
 
