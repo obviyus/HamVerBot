@@ -1,16 +1,14 @@
 ## [1.6.4](https://github.com/obviyus/HamVerBot/compare/v1.6.3...v1.6.4) (2026-06-22)
 
-
 ### Bug Fixes
 
-* **irc:** validate event command input ([1bfeada](https://github.com/obviyus/HamVerBot/commit/1bfeada2c3044c4b11f0f0819dfb151543401abe))
+- **irc:** validate event command input ([1bfeada](https://github.com/obviyus/HamVerBot/commit/1bfeada2c3044c4b11f0f0819dfb151543401abe))
 
 ## [1.6.3](https://github.com/obviyus/HamVerBot/compare/v1.6.2...v1.6.3) (2026-06-21)
 
-
 ### Bug Fixes
 
-* **irc:** exit on disconnected socket ([92ca12d](https://github.com/obviyus/HamVerBot/commit/92ca12d3a174c7d2d54722e9f25984b4e7a91a78))
+- **irc:** exit on disconnected socket ([92ca12d](https://github.com/obviyus/HamVerBot/commit/92ca12d3a174c7d2d54722e9f25984b4e7a91a78))
 
 ## [1.6.2](https://github.com/obviyus/HamVerBot/compare/v1.6.1...v1.6.2) (2026-05-25)
 

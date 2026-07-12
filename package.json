@@ -8,12 +8,12 @@
 		"build": "bun build src/index.ts --minify --target bun --outfile hamverbot.ts",
 		"schema:sync": "bun run scripts/sync-turso-schema.ts",
 		"test": "bun test",
-		"format": "oxfmt --check .",
-		"format:write": "oxfmt --write .",
-		"lint": "oxlint --type-aware .",
-		"lint:fix": "oxlint --type-aware . --fix",
-		"typecheck": "tsgo --noEmit -p tsconfig.json",
-		"check": "bun run typecheck && bun run format && bun run lint"
+		"format": "oxfmt .",
+		"format:check": "oxfmt --check .",
+		"lint": "oxlint",
+		"lint:fix": "oxlint --fix",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"check": "bun run typecheck && bun run format:check && bun run lint"
 	},
 	"dependencies": {
 		"@libsql/client": "^0.17.3",
@@ -24,12 +24,10 @@
 		"node-ical": "^0.26.1"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.14",
 		"@types/bun": "^1.3.13",
-		"@typescript/native-preview": "^7.0.0-dev.20260503.1",
-		"oxfmt": "^0.47.0",
-		"oxlint": "^1.62.0",
-		"oxlint-tsgolint": "^0.22.1",
-		"typescript": "^6.0.3"
+		"oxfmt": "^0.58.0",
+		"oxlint": "^1.73.0",
+		"oxlint-tsgolint": "^0.24.0",
+		"typescript": "^7.0.2"
 	}
 }
