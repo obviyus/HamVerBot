@@ -11,7 +11,7 @@
 
 <h2 align="center">🏎️ HamVerBot</h2>
 
-<p align="center">#f1's favorite bot running on <a href="https://libera.chat">Libera.Chat</a> built using the Bun + Typescript.</p>
+<p align="center">#f1's favourite bot on <a href="https://libera.chat">Libera.Chat</a> — F1 schedules, live timing, and results piped into IRC straight from F1's official SignalR feed. Built with Bun + TypeScript.</p>
 
 ## ✨ Features
 
