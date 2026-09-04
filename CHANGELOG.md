@@ -1,3 +1,10 @@
+## [1.6.5](https://github.com/obviyus/HamVerBot/compare/v1.6.4...v1.6.5) (2026-09-04)
+
+
+### Bug Fixes
+
+* **irc:** reclaim nickname before joining channels ([75636c7](https://github.com/obviyus/HamVerBot/commit/75636c7a1405143688479eb9cd7281231406c594))
+
 ## [1.6.4](https://github.com/obviyus/HamVerBot/compare/v1.6.3...v1.6.4) (2026-06-22)
 
 ### Bug Fixes
