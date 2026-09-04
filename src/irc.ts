@@ -69,21 +69,15 @@ function hasConfiguredNickPassword(nickPassword?: string): nickPassword is strin
 	return !!nickPassword && nickPassword !== "password";
 }
 
-function maybeMarkReady(client: Client): void {
-	if (!isRegistered || !isAuthenticated) return;
-
-	try {
-		client.raw(`MODE ${client.user.nick} +B`);
-		console.log(`Set bot mode (+B) for ${client.user.nick}`);
-	} catch (error) {
-		console.error("Failed to set bot mode:", error);
-	}
-	if (!shouldJoinOnReady) return;
+function maybeMarkReady(client: Client, nickname: string): void {
+	if (!isRegistered || !isAuthenticated || !shouldJoinOnReady) return;
 
 	shouldJoinOnReady = false;
+	client.raw(`MODE ${nickname} +B`);
+	console.log(`Set bot mode (+B) for ${nickname}`);
 	void (async () => {
 		console.log("Connection ready, joining channels...");
-		for (const channel of configuredChannels.concat(await getAllChannels())) {
+		for (const channel of new Set(configuredChannels.concat(await getAllChannels()))) {
 			client.join(channel);
 			console.log(`Joined channel: ${channel}`);
 		}
@@ -263,6 +257,32 @@ function dispatchCommand(message: string, target: string, nick: string, isPrivat
 }
 
 function initEventListeners(client: Client, nickname: string, nickPassword?: string): void {
+	let temporaryNickRequested = false;
+	let reclaimRequested = false;
+	let registrationFailed = false;
+
+	function stopRegistration(reason: string): void {
+		registrationFailed = true;
+		console.error(`IRC registration stopped: ${reason}. Not joining channels or retrying.`);
+	}
+
+	function finishRegistration(confirmedNick = client.user.nick): void {
+		if (registrationFailed || !isRegistered || !isAuthenticated) return;
+		if (client.caseCompare(confirmedNick, nickname)) {
+			maybeMarkReady(client, confirmedNick);
+			return;
+		}
+		if (!hasConfiguredNickPassword(nickPassword)) {
+			stopRegistration(`Cannot reclaim ${nickname} without account credentials`);
+			return;
+		}
+		if (reclaimRequested) return;
+
+		reclaimRequested = true;
+		console.log(`Reclaiming ${nickname}; waiting for server confirmation before joining channels`);
+		client.say("NickServ", `REGAIN ${nickname}`);
+	}
+
 	client.on("socket connected", () => {
 		const transport = (
 			client as unknown as {
@@ -280,25 +300,18 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		}
 	});
 
-	client.on("registered", () => {
-		if (hasConfiguredNickPassword(nickPassword)) {
-			const clientWithNetwork = client as Client & { network?: { cap?: { enabled?: string[] } } };
-			const caps = clientWithNetwork.network?.cap?.enabled || [];
-			if (!caps.includes("sasl")) {
-				isRegistered = true;
-				console.log("Connected to IRC server...");
-				authenticateWithNickServ(nickname, nickPassword);
-				return;
-			}
-		}
-
+	client.on("registered", (event) => {
 		isRegistered = true;
 		console.log("Connected to IRC server...");
+		if (registrationFailed) return;
 		if (!hasConfiguredNickPassword(nickPassword)) {
 			isAuthenticated = true;
 			console.log("No authentication required, ready to join channels");
+		} else if (!isAuthenticated) {
+			authenticateWithNickServ(nickname, nickPassword);
 		}
-		maybeMarkReady(client);
+		// The library updates user.nick after it emits this event.
+		finishRegistration(event.nick);
 	});
 
 	client.on("loggedin", (event: unknown) => {
@@ -306,21 +319,30 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		console.log(
 			`Successfully authenticated with SASL as ${(event as { account: string }).account}`,
 		);
-		maybeMarkReady(client);
+		finishRegistration();
 	});
 
 	client.on("sasl failed", (event: unknown) => {
 		console.error(`SASL authentication failed: ${(event as { reason: string }).reason}`);
-		if (hasConfiguredNickPassword(nickPassword)) {
-			console.log("Falling back to NickServ authentication");
-			authenticateWithNickServ(nickname, nickPassword);
-		}
+		console.log("Will authenticate with NickServ after registration");
 	});
 
-	client.on("nick in use", () => {
-		const altNick = `${nickname}_`;
-		console.log(`Nickname ${nickname} in use, trying ${altNick}`);
+	client.on("nick in use", (event) => {
+		if (registrationFailed) return;
+		if (isRegistered || temporaryNickRequested || !client.caseCompare(event.nick, nickname)) {
+			stopRegistration(`Nickname ${event.nick} is still in use`);
+			return;
+		}
+		temporaryNickRequested = true;
+		const altNick = `HVB${crypto.randomUUID().slice(0, 6)}`;
+		console.log(`Nickname ${nickname} in use; using ${altNick} only for account recovery`);
 		client.changeNick(altNick);
+	});
+
+	client.on("nick", (event) => {
+		if (client.caseCompare(event.nick, client.user.nick)) {
+			finishRegistration(event.new_nick);
+		}
 	});
 
 	client.on("error", (error: unknown) => {
@@ -358,33 +380,6 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		console.log("Server options received:", JSON.stringify(options));
 	});
 
-	client.on("message", (event) => {
-		if (event.nick === "NickServ") {
-			console.log(`[NickServ] ${event.message}`);
-			if (
-				event.message.includes("You are now identified") ||
-				event.message.includes("You are already logged in")
-			) {
-				isAuthenticated = true;
-				console.log("Successfully authenticated with NickServ");
-				maybeMarkReady(client);
-			} else if (event.message.includes("Invalid password")) {
-				console.error("NickServ authentication failed: Invalid password");
-				console.error("Please check your IRC_NICK_PASSWORD environment variable");
-				const altNick = `${nickname}_${Math.floor(Math.random() * 1000)}`;
-				console.log(`Switching to alternative nickname: ${altNick}`);
-				client.changeNick(altNick);
-			} else if (event.message.includes("This nickname is registered")) {
-				console.warn("This nickname is registered but we couldn't authenticate");
-				console.warn("Using the nickname anyway, but we might be disconnected");
-			}
-		} else {
-			console.log(`[${event.target}] ${event.nick}: ${event.message}`);
-		}
-
-		dispatchCommand(event.message, event.target, event.nick, false);
-	});
-
 	client.on("userlist", (event: unknown) => {
 		const userlistEvent = event as {
 			channel: string;
@@ -415,18 +410,27 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 	});
 
 	client.on("privmsg", (event) => {
-		if (event.target === nickname) {
-			console.log(`[PM] ${event.nick}: ${event.message}`);
-			dispatchCommand(event.message, event.nick, event.nick, true);
-		}
+		if (!isReady) return;
+		const isPrivate = client.caseCompare(event.target, client.user.nick);
+		console.log(`[${isPrivate ? "PM" : event.target}] ${event.nick}: ${event.message}`);
+		dispatchCommand(event.message, isPrivate ? event.nick : event.target, event.nick, isPrivate);
 	});
 
-	client.on("notice", (event: unknown) => {
-		const noticeEvent = event as { from_server: boolean; nick?: string; message: string };
-		if (noticeEvent.from_server) {
-			console.log(`[Server Notice] ${noticeEvent.message}`);
+	client.on("notice", (event) => {
+		if (event.from_server) {
+			console.log(`[Server Notice] ${event.message}`);
 		} else {
-			console.log(`[Notice] ${noticeEvent.nick}: ${noticeEvent.message}`);
+			console.log(`[Notice] ${event.nick}: ${event.message}`);
+			if (!client.caseCompare(event.nick, "NickServ")) return;
+			if (
+				event.message.includes("You are now identified") ||
+				event.message.includes("You are already logged in")
+			) {
+				isAuthenticated = true;
+				finishRegistration();
+			} else if (event.message.includes("Invalid password")) {
+				stopRegistration("NickServ rejected the account password");
+			}
 		}
 	});
 
@@ -463,7 +467,7 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 function authenticateWithNickServ(nickname: string, password: string): void {
 	const client = getClient();
 	console.log(`Attempting to authenticate with NickServ for nickname: ${nickname}`);
-	client.say("NickServ", `IDENTIFY ${password}`);
+	client.say("NickServ", `IDENTIFY ${nickname} ${password}`);
 	console.log("Sent authentication to NickServ");
 }
 

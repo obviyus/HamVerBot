@@ -17,13 +17,7 @@ class FakeClient {
 	rawCalls: Array<string | string[]> = [];
 	partCalls: string[] = [];
 	quitCalls: string[] = [];
-	network = {
-		cap: {
-			enabled: [] as string[],
-			isEnabled: (_cap: string) => false,
-		},
-	};
-
+	nickCalls: string[] = [];
 	constructor() {
 		FakeClient.instances.push(this);
 	}
@@ -33,8 +27,14 @@ class FakeClient {
 	}
 
 	emit(event: string, payload?: unknown): void {
+		if (event === "registered") payload ??= { nick: this.user.nick };
 		for (const handler of this.handlers.get(event) || []) {
 			handler(payload);
+		}
+		if (event === "registered") this.user.nick = (payload as { nick: string }).nick;
+		if (event === "nick") {
+			const change = payload as { nick: string; new_nick: string };
+			if (this.caseCompare(change.nick, this.user.nick)) this.user.nick = change.new_nick;
 		}
 	}
 
@@ -56,7 +56,11 @@ class FakeClient {
 	}
 
 	changeNick(nick: string): void {
-		this.user.nick = nick;
+		this.nickCalls.push(nick);
+	}
+
+	caseCompare(left: string, right: string): boolean {
+		return left.toLowerCase() === right.toLowerCase();
 	}
 
 	part(channel: string): void {
@@ -136,7 +140,9 @@ describe("IRC client", () => {
 		});
 
 		const client = getClient() as unknown as FakeClient;
-		client.emit("message", {
+		client.emit("registered");
+		await waitForIrcReady();
+		client.emit("privmsg", {
 			nick: "obviyus",
 			target: "#f1",
 			message: "!ping",
@@ -279,9 +285,8 @@ describe("IRC client", () => {
 		});
 
 		const client = getClient() as unknown as FakeClient;
-		client.network.cap.enabled = ["sasl"];
-		client.emit("registered");
 		client.emit("loggedin", { account: "HamVerBot" });
+		client.emit("registered");
 		await Promise.resolve();
 		await Promise.resolve();
 
@@ -331,7 +336,6 @@ describe("IRC client", () => {
 		});
 
 		const client = getClient() as unknown as FakeClient;
-		client.network.cap.enabled = ["sasl"];
 		client.emit("loggedin", { account: "HamVerBot" });
 		await Promise.resolve();
 
@@ -344,7 +348,7 @@ describe("IRC client", () => {
 		expect(client.joinCalls).toEqual(["#f1", "#db"]);
 	});
 
-	test("falls back to NickServ after SASL failure", async () => {
+	test("identifies the configured account after registration when SASL fails", async () => {
 		await initIrcClient({
 			server: "irc.libera.chat",
 			port: 6697,
@@ -356,10 +360,12 @@ describe("IRC client", () => {
 
 		const client = getClient() as unknown as FakeClient;
 		client.emit("sasl failed", { reason: "bad auth" });
+		expect(client.sayCalls).toEqual([]);
+		client.emit("registered");
 
 		expect(client.sayCalls).toContainEqual({
 			target: "NickServ",
-			message: "IDENTIFY secret",
+			message: "IDENTIFY HamVerBot secret",
 		});
 	});
 
@@ -375,7 +381,8 @@ describe("IRC client", () => {
 
 		const client = getClient() as unknown as FakeClient;
 		client.emit("registered");
-		client.emit("message", {
+		client.emit("notice", {
+			from_server: false,
 			nick: "NickServ",
 			target: "HamVerBot",
 			message: "You are now identified for HamVerBot.",
@@ -388,9 +395,7 @@ describe("IRC client", () => {
 		expect(client.joinCalls).toContain("#f1");
 	});
 
-	test("switches nickname on NickServ invalid password", async () => {
-		const mathRandomSpy = spyOn(Math, "random").mockReturnValue(0.123);
-
+	test("stops registration without changing nicknames when NickServ rejects the password", async () => {
 		await initIrcClient({
 			server: "irc.libera.chat",
 			port: 6697,
@@ -401,14 +406,141 @@ describe("IRC client", () => {
 		});
 
 		const client = getClient() as unknown as FakeClient;
-		client.emit("message", {
+		client.emit("registered");
+		client.emit("notice", {
+			from_server: false,
 			nick: "NickServ",
 			target: "HamVerBot",
 			message: "Invalid password for HamVerBot",
 		});
 
-		expect(client.user.nick).toBe("HamVerBot_123");
-		mathRandomSpy.mockRestore();
+		client.emit("loggedin", { account: "HamVerBot" });
+		await Promise.resolve();
+		expect(client.nickCalls).toEqual([]);
+		expect(client.joinCalls).toEqual([]);
+	});
+
+	test("reclaims the nickname once and waits for its server-confirmed change before joining", async () => {
+		getAllChannelsMock.mockResolvedValue(["#f1", "#db"]);
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			nickPassword: "secret",
+			channels: ["#f1"],
+		});
+		const client = getClient() as unknown as FakeClient;
+		client.emit("nick in use", { nick: "HamVerBot", reason: "Nickname is already in use" });
+		const temporaryNick = client.nickCalls[0];
+		expect(temporaryNick).toMatch(/^HVB[0-9a-f]{6}$/);
+		expect(client.user.nick).toBe("HamVerBot");
+		client.emit("loggedin", { account: "HamVerBot" });
+		client.emit("registered", { nick: temporaryNick });
+		client.emit("loggedin", { account: "HamVerBot" });
+		client.emit("notice", {
+			from_server: false,
+			nick: "NickServ",
+			target: temporaryNick,
+			message: "You are already logged in as HamVerBot.",
+		});
+		client.emit("privmsg", { nick: "reader", target: temporaryNick, message: "!ping" });
+		await Promise.resolve();
+		expect(client.sayCalls).toEqual([{ target: "NickServ", message: "REGAIN HamVerBot" }]);
+		expect(client.joinCalls).toEqual([]);
+		expect(client.rawCalls).toEqual([]);
+		expect(handleIrcMessageMock).not.toHaveBeenCalled();
+		client.emit("nick", { nick: "someoneelse", new_nick: "HamVerBot" });
+		expect(client.joinCalls).toEqual([]);
+		client.emit("nick", { nick: temporaryNick, new_nick: "HamVerBot" });
+		await waitForIrcReady();
+		client.emit("loggedin", { account: "HamVerBot" });
+		expect(client.joinCalls).toEqual(["#f1", "#db"]);
+		expect(client.rawCalls).toEqual(["MODE HamVerBot +B"]);
+		expect(client.sayCalls).toHaveLength(1);
+	});
+
+	test("does not cycle nicknames when the temporary nickname is also occupied", async () => {
+		await initIrcClient({ server: "irc.libera.chat", port: 6697, nickname: "HamVerBot" });
+		const client = getClient() as unknown as FakeClient;
+		client.emit("nick in use", { nick: "HamVerBot" });
+		client.emit("nick in use", { nick: client.nickCalls[0] });
+		client.emit("nick in use", { nick: client.nickCalls[0] });
+		client.emit("registered");
+		await Promise.resolve();
+		expect(client.nickCalls).toHaveLength(1);
+		expect(client.joinCalls).toEqual([]);
+		expect(client.sayCalls).toEqual([]);
+	});
+
+	test("does not repeat a denied nickname recovery", async () => {
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			nickPassword: "secret",
+		});
+		const client = getClient() as unknown as FakeClient;
+		client.emit("loggedin", { account: "HamVerBot" });
+		client.emit("registered", { nick: "HVB123456" });
+		client.emit("nick in use", { nick: "HamVerBot", reason: "Nickname is already in use" });
+		client.emit("loggedin", { account: "HamVerBot" });
+		await Promise.resolve();
+		expect(client.sayCalls).toEqual([{ target: "NickServ", message: "REGAIN HamVerBot" }]);
+		expect(client.nickCalls).toEqual([]);
+		expect(client.joinCalls).toEqual([]);
+	});
+
+	test("uses the account name for NickServ login while connected under a temporary nickname", async () => {
+		await initIrcClient({
+			server: "irc.libera.chat",
+			port: 6697,
+			nickname: "HamVerBot",
+			nickPassword: "secret",
+		});
+		const client = getClient() as unknown as FakeClient;
+		client.emit("registered", { nick: "HVB123456" });
+		client.emit("notice", {
+			from_server: false,
+			nick: "NickServ",
+			target: "HVB123456",
+			message: "You are now identified for HamVerBot.",
+		});
+		await Promise.resolve();
+		expect(client.sayCalls).toEqual([
+			{ target: "NickServ", message: "IDENTIFY HamVerBot secret" },
+			{ target: "NickServ", message: "REGAIN HamVerBot" },
+		]);
+		expect(client.joinCalls).toEqual([]);
+	});
+
+	test("stays out of channels when nickname recovery has no credentials", async () => {
+		await initIrcClient({ server: "irc.libera.chat", port: 6697, nickname: "HamVerBot" });
+		const client = getClient() as unknown as FakeClient;
+		client.emit("registered", { nick: "HVB123456" });
+		await Promise.resolve();
+		expect(client.joinCalls).toEqual([]);
+		expect(client.sayCalls).toEqual([]);
+	});
+
+	test("routes private commands using the current nickname and ignores notices and actions", async () => {
+		await initIrcClient({ server: "irc.libera.chat", port: 6697, nickname: "HamVerBot" });
+		const client = getClient() as unknown as FakeClient;
+		client.emit("registered");
+		await waitForIrcReady();
+		client.user.nick = "HamVerBot_";
+		const event = { nick: "reader", target: "hamverbot_", message: "!ping" };
+		client.emit("message", { ...event, type: "privmsg" });
+		client.emit("privmsg", event);
+		client.emit("message", { ...event, type: "notice" });
+		client.emit("notice", { ...event, from_server: false });
+		client.emit("message", { ...event, type: "action" });
+		client.emit("action", event);
+		expect(handleIrcMessageMock).toHaveBeenCalledTimes(1);
+		expect(handleIrcMessageMock).toHaveBeenCalledWith("ping", {
+			target: "reader",
+			nick: "reader",
+			isPrivate: true,
+		});
 	});
 
 	test("exits when the IRC socket closes", async () => {

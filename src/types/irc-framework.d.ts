@@ -33,6 +33,14 @@ declare module "irc-framework" {
 		changeNick(nick: string): void;
 		say(target: string, message: string): void;
 		join(channel: string): void;
+		caseCompare(left: string, right: string): boolean;
+		on(event: "registered", listener: (event: { nick: string }) => void): this;
+		on(event: "nick in use", listener: (event: { nick: string; reason: string }) => void): this;
+		on(event: "nick", listener: (event: { nick: string; new_nick: string }) => void): this;
+		on(
+			event: "notice",
+			listener: (event: IrcMessageEvent & { from_server: boolean }) => void,
+		): this;
 		on(event: "message", listener: (event: IrcMessageEvent) => void): this;
 		on(event: "privmsg", listener: (event: IrcMessageEvent) => void): this;
 		on(event: string, listener: (...args: unknown[]) => void): this;
