@@ -15,6 +15,7 @@ export interface IRCConfig {
 	channels: string[];
 	commandPrefix: string;
 	owners: string[];
+	predictionAdmins: string[];
 }
 
 export interface DatabaseConfig {
@@ -57,6 +58,7 @@ export function loadConfig(): AppConfig {
 			channels: channels.split(","),
 			commandPrefix: process.env.IRC_COMMAND_PREFIX || "!",
 			owners: (process.env.IRC_OWNERS || "obviyus").split(","),
+			predictionAdmins: (process.env.IRC_PREDICTION_ADMINS || "obviyus,tomf,ordos").split(","),
 		},
 		database: {
 			url: process.env.TURSO_DATABASE_URL || "",

@@ -3,6 +3,8 @@ declare module "irc-framework" {
 		nick: string;
 		target: string;
 		message: string;
+		/** NickServ account from IRCv3 account-tag; absent when the sender is not identified. */
+		account?: string | false;
 	}
 
 	export class Client {

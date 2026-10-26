@@ -21,6 +21,7 @@ import {
 interface CommandContext {
 	target: string;
 	nick: string;
+	account?: string;
 	isPrivate: boolean;
 }
 
@@ -91,7 +92,12 @@ async function getNextEventMessage(eventType?: EventType, timezone?: number): Pr
 
 type CommandResponse = string | undefined;
 type CommandHandler = (args: string[], context: CommandContext) => Promise<CommandResponse>;
-const WINNER_COMMAND_USERS = new Set(["obviyus", "tomf", "ordos"]);
+
+// Match NickServ accounts, not nicks: nicks change freely and anyone can take an unused one.
+function hasAccountIn(context: CommandContext, accounts: string[]): boolean {
+	const account = context.account?.toLowerCase();
+	return !!account && accounts.some((allowed) => allowed.trim().toLowerCase() === account);
+}
 
 function withErrorReply(
 	errorLabel: string,
@@ -185,11 +191,7 @@ const commandHandlers: Record<string, CommandHandler> = {
 				return "Run this in the channel you want to enable.";
 			}
 
-			if (
-				!appConfig.irc.owners.some(
-					(owner) => owner.trim().toLowerCase() === context.nick.toLowerCase(),
-				)
-			) {
+			if (!hasAccountIn(context, appConfig.irc.owners)) {
 				return "Only bot owners can enable autopost.";
 			}
 
@@ -215,7 +217,7 @@ const commandHandlers: Record<string, CommandHandler> = {
 				return "Run this in the channel you want to update.";
 			}
 
-			if (!WINNER_COMMAND_USERS.has(context.nick.toLowerCase())) {
+			if (!hasAccountIn(context, appConfig.irc.predictionAdmins)) {
 				return "Only prediction admins can set winners.";
 			}
 

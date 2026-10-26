@@ -22,6 +22,7 @@ describe("loadConfig", () => {
 		delete process.env.IRC_NICKNAME;
 		delete process.env.IRC_CHANNELS;
 		delete process.env.IRC_OWNERS;
+		delete process.env.IRC_PREDICTION_ADMINS;
 		delete process.env.IRC_COMMAND_PREFIX;
 		delete process.env.IRC_PORT;
 		delete process.env.IRC_USE_TLS;
@@ -37,6 +38,7 @@ describe("loadConfig", () => {
 		expect(config.irc.channels).toEqual(["#obviyes"]);
 		expect(config.irc.commandPrefix).toBe("!");
 		expect(config.irc.owners).toEqual(["obviyus"]);
+		expect(config.irc.predictionAdmins).toEqual(["obviyus", "tomf", "ordos"]);
 		expect(config.liveTiming.signalrBaseUrl).toBe("https://livetiming.formula1.com/signalrcore");
 		expect(config.liveTiming.staticBaseUrl).toBe("https://livetiming.formula1.com/static");
 	});
@@ -47,6 +49,7 @@ describe("loadConfig", () => {
 		process.env.IRC_NICKNAME = "RaceBot";
 		process.env.IRC_CHANNELS = "#f1,#f2";
 		process.env.IRC_OWNERS = "alice,bob";
+		process.env.IRC_PREDICTION_ADMINS = "carol,dave";
 		process.env.IRC_COMMAND_PREFIX = "?";
 		process.env.IRC_PORT = "7000";
 		process.env.IRC_USE_TLS = "false";
@@ -61,6 +64,7 @@ describe("loadConfig", () => {
 		expect(config.irc.nickname).toBe("RaceBot");
 		expect(config.irc.channels).toEqual(["#f1", "#f2"]);
 		expect(config.irc.owners).toEqual(["alice", "bob"]);
+		expect(config.irc.predictionAdmins).toEqual(["carol", "dave"]);
 		expect(config.irc.commandPrefix).toBe("?");
 		expect(config.irc.port).toBe(7000);
 		expect(config.irc.useTls).toBe(false);

@@ -65,6 +65,7 @@ IRC_COMMAND_PREFIX=!
 
 # Admin Settings
 IRC_OWNERS=obviyus
+IRC_PREDICTION_ADMINS=obviyus,tomf,ordos
 
 # Database Configuration, see: https://turso.tech/
 TURSO_DATABASE_URL=

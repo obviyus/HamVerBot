@@ -97,6 +97,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("ping", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -107,6 +108,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("help", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -120,6 +122,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("unknown", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -130,6 +133,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("winus obviyus", {
 			target: "#fn",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -141,6 +145,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("h2h ver", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -153,6 +158,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("h2h ver ham", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -171,6 +177,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("next", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -191,6 +198,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("next utc+5:30", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -210,6 +218,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("next gmt-5:30", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -223,6 +232,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("next utc+99", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -243,6 +253,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("when fp1", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -257,6 +268,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("when karaoke", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -273,6 +285,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("next", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -286,6 +299,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("prev", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -299,6 +313,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("prev", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -314,21 +329,25 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("drivers", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 		await handleIrcMessage("constructors", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 		await handleIrcMessage("weather", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 		await handleIrcMessage("stints", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -342,6 +361,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("h", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -355,6 +375,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("enable autopost", {
 			target: "obviyus",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: true,
 		});
 
@@ -380,6 +401,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("enable autopost", {
 			target: "#test",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -400,6 +422,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("enable autopost", {
 			target: "#test",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -415,11 +438,35 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("winner @obviyus +tomf ordos", {
 			target: "#fn",
 			nick: "tomf",
+			account: "tomf",
 			isPrivate: false,
 		});
 
 		expect(setPredictionWinnersMock).toHaveBeenCalledWith("#fn", ["obviyus", "tomf", "ordos"]);
 		expect(sendMessageMock).not.toHaveBeenCalled();
+	});
+
+	test("authorizes prediction winners by account rather than nick", async () => {
+		await handleIrcMessage("winner steew", {
+			target: "#f1",
+			nick: "tomb",
+			account: "tomf",
+			isPrivate: false,
+		});
+
+		expect(setPredictionWinnersMock).toHaveBeenCalledWith("#f1", ["steew"]);
+		expect(sendMessageMock).not.toHaveBeenCalled();
+	});
+
+	test("rejects prediction winners from an admin nick without the admin account", async () => {
+		await handleIrcMessage("winner steew", {
+			target: "#f1",
+			nick: "tomf",
+			isPrivate: false,
+		});
+
+		expect(setPredictionWinnersMock).not.toHaveBeenCalled();
+		expect(sendMessageMock).toHaveBeenCalledWith("#f1", "Only prediction admins can set winners.");
 	});
 
 	test("rejects prediction winners from non-whitelisted users", async () => {
@@ -437,6 +484,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("winner obviyus", {
 			target: "#f1",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: false,
 		});
 
@@ -448,6 +496,7 @@ describe("handleIrcMessage", () => {
 		await handleIrcMessage("winner obviyus", {
 			target: "obviyus",
 			nick: "obviyus",
+			account: "obviyus",
 			isPrivate: true,
 		});
 

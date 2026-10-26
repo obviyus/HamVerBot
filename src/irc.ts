@@ -248,10 +248,16 @@ export async function initIrcClient(config: IrcClientConfig): Promise<Client> {
 	return createAndConnectClient(config);
 }
 
-function dispatchCommand(message: string, target: string, nick: string, isPrivate: boolean): void {
+function dispatchCommand(
+	message: string,
+	target: string,
+	nick: string,
+	account: string | undefined,
+	isPrivate: boolean,
+): void {
 	if (!message.startsWith(appConfig.irc.commandPrefix)) return;
 	const commandText = message.slice(appConfig.irc.commandPrefix.length);
-	void handleIrcMessage(commandText, { target, nick, isPrivate }).catch((error) => {
+	void handleIrcMessage(commandText, { target, nick, account, isPrivate }).catch((error) => {
 		console.error("Error handling command:", error);
 	});
 }
@@ -413,7 +419,13 @@ function initEventListeners(client: Client, nickname: string, nickPassword?: str
 		if (!isReady) return;
 		const isPrivate = client.caseCompare(event.target, client.user.nick);
 		console.log(`[${isPrivate ? "PM" : event.target}] ${event.nick}: ${event.message}`);
-		dispatchCommand(event.message, isPrivate ? event.nick : event.target, event.nick, isPrivate);
+		dispatchCommand(
+			event.message,
+			isPrivate ? event.nick : event.target,
+			event.nick,
+			event.account || undefined,
+			isPrivate,
+		);
 	});
 
 	client.on("notice", (event) => {
