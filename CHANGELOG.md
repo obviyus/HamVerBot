@@ -1,3 +1,10 @@
+## [1.6.6](https://github.com/obviyus/HamVerBot/compare/v1.6.5...v1.6.6) (2026-10-26)
+
+
+### Bug Fixes
+
+* **commands:** authorize admin commands by NickServ account ([b6e6102](https://github.com/obviyus/HamVerBot/commit/b6e6102f1d1edcec12c5887ab722a83329aece06))
+
 ## [1.6.5](https://github.com/obviyus/HamVerBot/compare/v1.6.4...v1.6.5) (2026-09-04)
 
 
