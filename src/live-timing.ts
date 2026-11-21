@@ -1,14 +1,13 @@
 import * as signalR from "@microsoft/signalr";
 import config from "./config";
-import { fetchLiveTimingJson, fetchOptionalLiveTimingJson } from "./live-timing-json";
 
-const F1_STATIC_ENDPOINT = config.liveTiming.staticBaseUrl;
 const F1_SIGNALR_ENDPOINT = config.liveTiming.signalrBaseUrl;
 const AUTOPOST_RACE_CONTROL_WINDOW_MS = 5 * 60 * 1000;
 
 interface CurrentSessionInfo {
 	Meeting: {
 		Name: string;
+		OfficialName: string;
 	};
 	ArchiveStatus: {
 		Status: string;
@@ -104,6 +103,29 @@ class BunSignalRHttpClient extends signalR.HttpClient {
 	}
 }
 
+export interface LiveTimingDriver {
+	RacingNumber: string;
+	Reference?: string;
+	FirstName?: string;
+	LastName?: string;
+	FullName?: string;
+	BroadcastName?: string;
+	Tla: string;
+	TeamName?: string;
+	TeamColour?: string;
+}
+
+export interface LiveTimingLine {
+	Position?: string;
+	RacingNumber?: string;
+	BestLapTime?: {
+		Value?: string;
+	};
+	Stats?: Array<{
+		TimeDifftoPositionAhead?: string;
+	}>;
+}
+
 interface LiveTimingSnapshot {
 	RaceControlMessages?: {
 		Messages: RaceControlMessage[];
@@ -117,7 +139,10 @@ interface LiveTimingSnapshot {
 		WindDirection: string;
 		WindSpeed: string;
 	};
-	DriverList?: Record<string, { RacingNumber: string; Tla: string }>;
+	DriverList?: Record<string, LiveTimingDriver>;
+	TimingDataF1?: {
+		Lines: Record<string, LiveTimingLine>;
+	};
 	TimingAppData?: {
 		Lines: Record<
 			string,
@@ -207,33 +232,22 @@ export function formatAutopostRaceControlMessage(
 	return `⚖️ \x02${title}\x02: ${message.Message}`;
 }
 
-async function fetchCurrentSessionSnapshot(
+export async function fetchCurrentSessionSnapshot(
 	topics: LiveTimingTopic[],
 	createConnection: () => LiveTimingConnection = createLiveTimingConnection,
 ): Promise<LiveTimingSnapshot> {
-	const session = await fetchLiveTimingJson<CurrentSessionInfo>(
-		`${F1_STATIC_ENDPOINT}/SessionInfo.json`,
-	);
-	if (session.ArchiveStatus.Status === "Complete") {
-		const entries = await Promise.all(
-			topics.map(async (topic) => {
-				const data = await fetchOptionalLiveTimingJson(
-					`${F1_STATIC_ENDPOINT}/${session.Path}${topic}.json`,
-				);
-				return [topic, data] as const;
-			}),
-		);
-
-		return Object.fromEntries([
-			["SessionInfo", session],
-			...entries.filter((entry): entry is [LiveTimingTopic, unknown] => entry[1] !== undefined),
-		]) as LiveTimingSnapshot;
-	}
-
 	const connection = createConnection();
 	try {
 		await connection.start();
-		return await connection.invoke<LiveTimingSnapshot>("Subscribe", ["SessionInfo", ...topics]);
+		const snapshot = await connection.invoke<LiveTimingSnapshot>("Subscribe", [
+			"SessionInfo",
+			...topics,
+		]);
+		// SignalR marks each topic as a keyframe; static JSON never had this key.
+		for (const topic of Object.values(snapshot)) {
+			delete (topic as { _kf?: boolean })._kf;
+		}
+		return snapshot;
 	} finally {
 		await connection.stop();
 	}
