@@ -1,3 +1,10 @@
+## [1.6.7](https://github.com/obviyus/HamVerBot/compare/v1.6.6...v1.6.7) (2026-11-21)
+
+
+### Bug Fixes
+
+* **live-timing:** read sessions over SignalR instead of paywalled static JSON ([0d0aeea](https://github.com/obviyus/HamVerBot/commit/0d0aeea3bad8c0449fc1e60ed4de3594ff5cf41c))
+
 ## [1.6.6](https://github.com/obviyus/HamVerBot/compare/v1.6.5...v1.6.6) (2026-10-26)
 
 
