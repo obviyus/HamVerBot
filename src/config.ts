@@ -25,7 +25,6 @@ export interface DatabaseConfig {
 
 export interface LiveTimingConfig {
 	signalrBaseUrl: string;
-	staticBaseUrl: string;
 }
 
 export interface AppConfig {
@@ -67,9 +66,6 @@ export function loadConfig(): AppConfig {
 		liveTiming: {
 			signalrBaseUrl: cleanBaseUrl(
 				process.env.F1_SIGNALR_BASE_URL || "https://livetiming.formula1.com/signalrcore",
-			),
-			staticBaseUrl: cleanBaseUrl(
-				process.env.F1_STATIC_BASE_URL || "https://livetiming.formula1.com/static",
 			),
 		},
 		isDevelopment,

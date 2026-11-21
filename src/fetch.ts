@@ -14,13 +14,11 @@ import type {
 	SessionResults,
 } from "~/types/models";
 import { sessionKeyToEventType, stringToEventType } from "~/utils/events";
-import config from "./config";
-import { fetchLiveTimingJson } from "./live-timing-json";
+import { fetchCurrentSessionSnapshot } from "./live-timing";
 
 type CurrentConstructorStandings = { MRData: ConstructorMRData };
 type CurrentDriverStandings = { MRData: DriverMRData };
 
-const F1_SESSION_ENDPOINT = config.liveTiming.staticBaseUrl;
 const ERGAST_API_ENDPOINT = "https://api.jolpi.ca/ergast/f1";
 const SESSION_KEY_ALIASES: Record<string, string> = {
 	practice1: "fp1",
@@ -44,28 +42,16 @@ async function fetchJson<T>(url: string): Promise<T> {
 	return JSON.parse(cleanText) as T;
 }
 
-export async function fetchDriverList(path: string): Promise<void> {
-	console.log(`Fetching driver list for ${path}...`);
+export async function fetchDriverList(): Promise<void> {
+	console.log("Fetching driver list...");
 
 	try {
-		const response = await fetchLiveTimingJson<
-			Record<
-				string,
-				{
-					RacingNumber: string;
-					Reference: string;
-					FirstName: string;
-					LastName: string;
-					FullName: string;
-					BroadcastName: string;
-					Tla: string;
-					TeamName: string;
-					TeamColour: string;
-				}
-			>
-		>(`${F1_SESSION_ENDPOINT}/${path}DriverList.json`);
+		const { DriverList } = await fetchCurrentSessionSnapshot(["DriverList"]);
+		if (!DriverList) {
+			throw new Error("Live timing snapshot missing DriverList");
+		}
 
-		const drivers: Driver[] = Object.values(response).map((driverData) => ({
+		const drivers: Driver[] = Object.values(DriverList).map((driverData) => ({
 			racingNumber: Number.parseInt(driverData.RacingNumber, 10),
 			reference: driverData.Reference || "",
 			firstName: driverData.FirstName || "",
@@ -88,28 +74,15 @@ export async function readCurrentEvent(): Promise<{
 	path: string;
 	isComplete: boolean;
 }> {
-	const response = await fetchLiveTimingJson<{
-		ArchiveStatus: {
-			Status: string;
-		};
-		Path: string;
-	}>(`${F1_SESSION_ENDPOINT}/SessionInfo.json`);
+	const { SessionInfo } = await fetchCurrentSessionSnapshot([]);
+	if (!SessionInfo) {
+		throw new Error("Live timing snapshot missing SessionInfo");
+	}
 
 	return {
-		path: response.Path,
-		isComplete: response.ArchiveStatus.Status === "Complete",
+		path: SessionInfo.Path,
+		isComplete: SessionInfo.ArchiveStatus.Status === "Complete",
 	};
-}
-
-interface TimingLine {
-	Position?: string;
-	RacingNumber?: string;
-	BestLapTime?: {
-		Value?: string;
-	};
-	Stats?: Array<{
-		TimeDifftoPositionAhead?: string;
-	}>;
 }
 
 interface SessionResultEntry {
@@ -224,18 +197,12 @@ export async function fetchResults(path: string): Promise<string> {
 
 async function fetchFreshResults(path: string): Promise<SessionResults> {
 	console.log(`Fetching TimingDataF1 for ${path}...`);
-	const timingData = await fetchLiveTimingJson<Record<string, unknown>>(
-		`${F1_SESSION_ENDPOINT}/${path}TimingDataF1.json`,
-	);
+	const { SessionInfo, TimingDataF1 } = await fetchCurrentSessionSnapshot(["TimingDataF1"]);
+	if (SessionInfo?.Path !== path) {
+		throw new Error(`Live timing no longer serves ${path}`);
+	}
 
-	console.log("Fetching SessionInfo...");
-	const sessionInfoResponse = await fetchLiveTimingJson<{
-		Meeting: {
-			OfficialName: string;
-		};
-	}>(`${F1_SESSION_ENDPOINT}/SessionInfo.json`);
-
-	const lines = timingData.Lines as Record<string, TimingLine>;
+	const lines = TimingDataF1?.Lines;
 	if (!lines) {
 		throw new Error("Failed to extract lines from timing data");
 	}
@@ -283,7 +250,7 @@ async function fetchFreshResults(path: string): Promise<SessionResults> {
 	}
 	standings.sort((a, b) => a.position - b.position);
 	const eventType = eventTypeFromSession(path);
-	const meetingName = sessionInfoResponse.Meeting.OfficialName;
+	const meetingName = SessionInfo.Meeting.OfficialName;
 	const sessionName = eventType !== null ? await getEventTypeName(eventType) : "";
 	const sessionResult = {
 		title: `${meetingName}${sessionName ? `: ${sessionName}` : ""}`,

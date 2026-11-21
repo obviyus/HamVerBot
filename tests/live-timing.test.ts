@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import {
 	buildRaceControlMessageKey,
 	fetchCurrentSessionRaceControlMessages,
@@ -8,12 +8,6 @@ import {
 	isRecentRaceControlMessage,
 	shouldAutopostRaceControlMessage,
 } from "../src/live-timing";
-
-const F1_STATIC_ENDPOINT = "https://livetiming.formula1.com/static";
-const originalFetch = globalThis.fetch;
-const fetchMock = mock(async (_input: RequestInfo | URL) => {
-	throw new Error("Unexpected fetch");
-});
 
 function createConnectionMock(snapshot: Record<string, unknown>) {
 	const startMock = mock(async () => {});
@@ -32,17 +26,6 @@ function createConnectionMock(snapshot: Record<string, unknown>) {
 	};
 }
 
-function jsonResponse(data: unknown, status = 200, bom = false): Response {
-	const body = `${bom ? "\uFEFF" : ""}${JSON.stringify(data)}`;
-	return new Response(body, { status });
-}
-
-function requestUrl(input: RequestInfo | URL): string {
-	if (typeof input === "string") return input;
-	if (input instanceof URL) return input.toString();
-	return input.url;
-}
-
 function currentSessionInfo(overrides: Record<string, unknown> = {}) {
 	return {
 		Meeting: { Name: "Australian Grand Prix" },
@@ -52,35 +35,6 @@ function currentSessionInfo(overrides: Record<string, unknown> = {}) {
 		...overrides,
 	};
 }
-
-function mockCurrentSessionFetch(
-	sessionInfo: Record<string, unknown>,
-	responses: Record<string, Response> = {},
-): void {
-	fetchMock.mockImplementation(async (input) => {
-		const url = requestUrl(input);
-		if (url === `${F1_STATIC_ENDPOINT}/SessionInfo.json`) {
-			return jsonResponse(sessionInfo);
-		}
-
-		for (const [suffix, response] of Object.entries(responses)) {
-			if (url.endsWith(suffix)) {
-				return response;
-			}
-		}
-
-		throw new Error(`Unexpected URL: ${url}`);
-	});
-}
-
-beforeEach(() => {
-	fetchMock.mockReset();
-	globalThis.fetch = fetchMock as typeof fetch;
-});
-
-afterEach(() => {
-	globalThis.fetch = originalFetch;
-});
 
 describe("live timing helpers", () => {
 	test("builds stable race control keys", () => {
@@ -190,13 +144,6 @@ describe("live timing helpers", () => {
 
 describe("live timing fetchers", () => {
 	test("fetches and formats session weather from SignalR while archive is generating", async () => {
-		mockCurrentSessionFetch(
-			currentSessionInfo({
-				Name: "Qualifying",
-				Path: "2026/aus/quali/",
-			}),
-		);
-
 		const { createConnection, invokeMock, stopMock } = createConnectionMock({
 			SessionInfo: {
 				Meeting: { Name: "Australian Grand Prix" },
@@ -222,13 +169,6 @@ describe("live timing fetchers", () => {
 	});
 
 	test("fetches and formats current stints", async () => {
-		mockCurrentSessionFetch(
-			currentSessionInfo({
-				Name: "Practice 2",
-				Path: "2026/aus/fp2/",
-			}),
-		);
-
 		const { createConnection, invokeMock, stopMock } = createConnectionMock({
 			SessionInfo: {
 				Meeting: { Name: "Australian Grand Prix" },
@@ -267,68 +207,16 @@ describe("live timing fetchers", () => {
 		expect(stopMock).toHaveBeenCalledTimes(1);
 	});
 
-	test("fetches archived weather from static JSON when archive is complete", async () => {
-		mockCurrentSessionFetch(currentSessionInfo({ ArchiveStatus: { Status: "Complete" } }), {
-			"2026/aus/fp3/WeatherData.json": jsonResponse(
-				{
-					AirTemp: "18",
-					Humidity: "42",
-					Rainfall: "0",
-					TrackTemp: "31",
-					WindDirection: "180",
-					WindSpeed: "3",
-				},
-				200,
-				true,
-			),
-		});
-
-		expect(
-			fetchSessionWeather(() => {
-				throw new Error("SignalR should not be used for archived data");
-			}),
-		).resolves.toBe(
-			"🌦️ \x02Australian Grand Prix: Practice 3 Weather\x02: Air 18C | Track 31C | Humidity 42% | Wind 3 @ 180deg | Rain 0",
-		);
-	});
-
-	test("fetches archived race control messages from static JSON when archive is complete", async () => {
-		mockCurrentSessionFetch(currentSessionInfo({ ArchiveStatus: { Status: "Complete" } }), {
-			"2026/aus/fp3/RaceControlMessages.json": jsonResponse({
-				Messages: [{ Utc: "1", Category: "Flag", Flag: "RED", Message: "RED FLAG" }],
-			}),
-		});
-
-		expect(
-			fetchCurrentSessionRaceControlMessages(() => {
-				throw new Error("SignalR should not be used for archived data");
-			}),
-		).resolves.toEqual({
-			session: {
-				Meeting: { Name: "Australian Grand Prix" },
-				ArchiveStatus: { Status: "Complete" },
-				Name: "Practice 3",
-				Path: "2026/aus/fp3/",
-			},
-			messages: [{ Utc: "1", Category: "Flag", Flag: "RED", Message: "RED FLAG" }],
-		});
-	});
-
-	test("fetches current session race control messages", async () => {
-		mockCurrentSessionFetch(
-			currentSessionInfo({
-				Name: "Race",
-				Path: "2026/aus/race/",
-			}),
-		);
-
+	test("fetches current session race control messages without SignalR keyframe flags", async () => {
 		const startMock = mock(async () => {});
 		const stopMock = mock(async () => {});
 		const invokeMock = mock(async () => ({
 			RaceControlMessages: {
 				Messages: [{ Utc: "1", Category: "Flag", Flag: "RED", Message: "RED FLAG" }],
+				_kf: true,
 			},
 			SessionInfo: {
+				_kf: true,
 				Meeting: { Name: "Australian Grand Prix" },
 				ArchiveStatus: { Status: "Generating" },
 				Name: "Race",
@@ -357,8 +245,6 @@ describe("live timing fetchers", () => {
 	});
 
 	test("keeps live timing connection open until subscribe resolves", async () => {
-		mockCurrentSessionFetch(currentSessionInfo());
-
 		let stopped = false;
 		const stopMock = mock(async () => {
 			stopped = true;
@@ -394,8 +280,6 @@ describe("live timing fetchers", () => {
 	});
 
 	test("stops live timing connection when subscribe fails", async () => {
-		mockCurrentSessionFetch(currentSessionInfo());
-
 		const startMock = mock(async () => {});
 		const stopMock = mock(async () => {});
 		const invokeMock = mock(async () => {
@@ -410,13 +294,5 @@ describe("live timing fetchers", () => {
 			})),
 		).rejects.toThrow("boom");
 		expect(stopMock).toHaveBeenCalledTimes(1);
-	});
-
-	test("surfaces live timing 403s", async () => {
-		fetchMock.mockResolvedValue(new Response(null, { status: 403 }));
-
-		expect(fetchSessionWeather()).rejects.toThrow(
-			`HTTP error! Status: 403 for URL: ${F1_STATIC_ENDPOINT}/SessionInfo.json`,
-		);
 	});
 });

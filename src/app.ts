@@ -27,7 +27,7 @@ export async function start(): Promise<void> {
 
 	const latestPath = await getLatestPath();
 	if (latestPath) {
-		await fetchDriverList(latestPath);
+		await fetchDriverList();
 		await fetchResults(latestPath);
 	}
 

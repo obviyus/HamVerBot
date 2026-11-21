@@ -27,7 +27,6 @@ describe("loadConfig", () => {
 		delete process.env.IRC_PORT;
 		delete process.env.IRC_USE_TLS;
 		delete process.env.F1_SIGNALR_BASE_URL;
-		delete process.env.F1_STATIC_BASE_URL;
 		delete process.env.TURSO_DATABASE_URL;
 		delete process.env.TURSO_AUTH_TOKEN;
 
@@ -40,7 +39,6 @@ describe("loadConfig", () => {
 		expect(config.irc.owners).toEqual(["obviyus"]);
 		expect(config.irc.predictionAdmins).toEqual(["obviyus", "tomf", "ordos"]);
 		expect(config.liveTiming.signalrBaseUrl).toBe("https://livetiming.formula1.com/signalrcore");
-		expect(config.liveTiming.staticBaseUrl).toBe("https://livetiming.formula1.com/static");
 	});
 
 	test("uses production and environment overrides", () => {
@@ -54,7 +52,6 @@ describe("loadConfig", () => {
 		process.env.IRC_PORT = "7000";
 		process.env.IRC_USE_TLS = "false";
 		process.env.F1_SIGNALR_BASE_URL = "https://hamverbot-f1live.example.workers.dev/signalrcore/";
-		process.env.F1_STATIC_BASE_URL = "https://f1live.boringparty-0de.workers.dev/static/";
 		process.env.TURSO_DATABASE_URL = "libsql://example";
 		process.env.TURSO_AUTH_TOKEN = "secret";
 
@@ -70,9 +67,6 @@ describe("loadConfig", () => {
 		expect(config.irc.useTls).toBe(false);
 		expect(config.liveTiming.signalrBaseUrl).toBe(
 			"https://hamverbot-f1live.example.workers.dev/signalrcore",
-		);
-		expect(config.liveTiming.staticBaseUrl).toBe(
-			"https://f1live.boringparty-0de.workers.dev/static",
 		);
 		expect(config.database.url).toBe("libsql://example");
 		expect(config.database.authToken).toBe("secret");

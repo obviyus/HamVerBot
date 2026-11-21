@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import * as database from "../src/database";
+import * as liveTiming from "../src/live-timing";
 
 type DbClient = Awaited<ReturnType<typeof database.getDb>>;
 
@@ -31,7 +32,23 @@ const {
 } = fetchModule;
 
 const originalFetch = globalThis.fetch;
-const F1_SESSION_ENDPOINT = "https://livetiming.formula1.com/static";
+const snapshotMock = mock<typeof liveTiming.fetchCurrentSessionSnapshot>(async () => ({}));
+
+function sessionInfo(path: string, officialName: string) {
+	return {
+		Meeting: { Name: officialName, OfficialName: officialName },
+		ArchiveStatus: { Status: "Complete" },
+		Name: "Session",
+		Path: path,
+	};
+}
+
+function mockSnapshot(path: string, officialName: string, lines: Record<string, unknown>): void {
+	snapshotMock.mockResolvedValue({
+		SessionInfo: sessionInfo(path, officialName),
+		TimingDataF1: { Lines: lines },
+	});
+}
 const fetchMock = mock(async (_input: RequestInfo | URL) => new Response(null, { status: 500 }));
 
 function jsonResponse(data: unknown, status = 200, bom = false): Response {
@@ -55,6 +72,9 @@ beforeEach(() => {
 	storeDriversMock.mockReset();
 	storeEventResultMock.mockReset();
 	fetchMock.mockReset();
+	snapshotMock.mockReset();
+	snapshotMock.mockResolvedValue({});
+	spyOn(liveTiming, "fetchCurrentSessionSnapshot").mockImplementation(snapshotMock);
 	globalThis.fetch = fetchMock as unknown as typeof fetch;
 	spyOn(database, "getDb").mockImplementation(getDbMock);
 	spyOn(database, "getEventTypeName").mockImplementation(getEventTypeNameMock);
@@ -71,8 +91,8 @@ afterEach(() => {
 
 describe("fetchDriverList", () => {
 	test("stores parsed drivers from the live timing feed", async () => {
-		fetchMock.mockResolvedValue(
-			jsonResponse({
+		snapshotMock.mockResolvedValue({
+			DriverList: {
 				"81": {
 					RacingNumber: "81",
 					Reference: "oscar_piastri",
@@ -94,10 +114,10 @@ describe("fetchDriverList", () => {
 					Tla: "NOR",
 					TeamName: "McLaren",
 				},
-			}),
-		);
+			},
+		});
 
-		await fetchDriverList("2026/aus/fp3/");
+		await fetchDriverList();
 
 		expect(storeDriversMock).toHaveBeenCalledWith([
 			{
@@ -128,25 +148,14 @@ describe("fetchDriverList", () => {
 
 describe("readCurrentEvent", () => {
 	test("returns path and completion flag", async () => {
-		fetchMock.mockResolvedValue(
-			jsonResponse({
-				ArchiveStatus: { Status: "Complete" },
-				Path: "2026/aus/qualifying/",
-			}),
-		);
+		snapshotMock.mockResolvedValue({
+			SessionInfo: sessionInfo("2026/aus/qualifying/", "Australian Grand Prix"),
+		});
 
 		expect(readCurrentEvent()).resolves.toEqual({
 			path: "2026/aus/qualifying/",
 			isComplete: true,
 		});
-	});
-
-	test("surfaces live timing 403s", async () => {
-		fetchMock.mockResolvedValue(new Response(null, { status: 403 }));
-
-		expect(readCurrentEvent()).rejects.toThrow(
-			`HTTP error! Status: 403 for URL: ${F1_SESSION_ENDPOINT}/SessionInfo.json`,
-		);
 	});
 });
 
@@ -173,7 +182,7 @@ describe("fetchResults", () => {
 		expect(fetchResults("2026/aus/qualifying/")).resolves.toBe(
 			"🏎️ \x02Australian Grand Prix: Qualifying Results\x02: 1. DRV1 - \x0303[1:20.000]\x03 2. DRV2 - \x0303[1:21.000]\x03 3. DRV3 - \x0303[1:22.000]\x03 4. DRV4 - \x0303[1:23.000]\x03 5. DRV5 - \x0303[1:24.000]\x03 6. DRV6 - \x0303[1:25.000]\x03 7. DRV7 - \x0303[1:26.000]\x03 8. DRV8 - \x0303[1:27.000]\x03 9. DRV9 - \x0303[1:28.000]\x03 10. DRV10 - \x0303[1:29.000]\x03",
 		);
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(snapshotMock).not.toHaveBeenCalled();
 	});
 
 	test("fetches fresh results, maps drivers, and stores the session", async () => {
@@ -202,37 +211,23 @@ describe("fetchResults", () => {
 			return { rows: [] };
 		});
 
-		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
-			const url = requestUrl(input);
-			if (url.endsWith("/TimingDataF1.json")) {
-				return jsonResponse({
-					Lines: {
-						"1": {
-							Position: "1",
-							RacingNumber: "1",
-							BestLapTime: { Value: "1:15.111" },
-						},
-						"81": {
-							Position: "2",
-							RacingNumber: "81",
-							BestLapTime: { Value: "1:15.222" },
-							Stats: [{ TimeDifftoPositionAhead: "+0.111" }],
-						},
-					},
-				});
-			}
-
-			if (url.endsWith("/SessionInfo.json")) {
-				return jsonResponse({
-					Meeting: {
-						OfficialName: "Australian Grand Prix",
-						Name: "Australian Grand Prix",
-					},
-				});
-			}
-
-			throw new Error(`Unexpected URL: ${url}`);
-		});
+		mockSnapshot(
+			"2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Practice_2/",
+			"Australian Grand Prix",
+			{
+				"1": {
+					Position: "1",
+					RacingNumber: "1",
+					BestLapTime: { Value: "1:15.111" },
+				},
+				"81": {
+					Position: "2",
+					RacingNumber: "81",
+					BestLapTime: { Value: "1:15.222" },
+					Stats: [{ TimeDifftoPositionAhead: "+0.111" }],
+				},
+			},
+		);
 
 		getEventTypeNameMock.mockResolvedValue("Practice 2");
 
@@ -267,6 +262,16 @@ describe("fetchResults", () => {
 		);
 	});
 
+	test("does not store results from a different live session", async () => {
+		dbExecuteMock.mockResolvedValue({ rows: [] });
+		mockSnapshot("2026/las_vegas/race/", "Las Vegas Grand Prix", {});
+
+		expect(fetchResults("2026/las_vegas/qualifying/")).resolves.toBe(
+			"Error fetching results: Live timing no longer serves 2026/las_vegas/qualifying/",
+		);
+		expect(storeEventResultMock).not.toHaveBeenCalled();
+	});
+
 	test("stores fresh results by meeting name when exact type match is missing", async () => {
 		dbExecuteMock.mockImplementation(async (query: unknown) => {
 			if (typeof query === "string" && query.includes("SELECT racing_number, tla, team_name")) {
@@ -294,31 +299,17 @@ describe("fetchResults", () => {
 			return { rows: [] };
 		});
 
-		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
-			const url = requestUrl(input);
-			if (url.endsWith("/TimingDataF1.json")) {
-				return jsonResponse({
-					Lines: {
-						"1": {
-							Position: "1",
-							RacingNumber: "1",
-							BestLapTime: { Value: "1:15.111" },
-						},
-					},
-				});
-			}
-
-			if (url.endsWith("/SessionInfo.json")) {
-				return jsonResponse({
-					Meeting: {
-						OfficialName: "Australian Grand Prix",
-						Name: "Australian Grand Prix",
-					},
-				});
-			}
-
-			throw new Error(`Unexpected URL: ${url}`);
-		});
+		mockSnapshot(
+			"2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Practice_2/",
+			"Australian Grand Prix",
+			{
+				"1": {
+					Position: "1",
+					RacingNumber: "1",
+					BestLapTime: { Value: "1:15.111" },
+				},
+			},
+		);
 
 		getEventTypeNameMock.mockResolvedValue("Practice 2");
 
@@ -349,31 +340,17 @@ describe("fetchResults", () => {
 			return { rows: [] };
 		});
 
-		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
-			const url = requestUrl(input);
-			if (url.endsWith("/TimingDataF1.json")) {
-				return jsonResponse({
-					Lines: {
-						"1": {
-							Position: "1",
-							RacingNumber: "1",
-							BestLapTime: { Value: "1:15.111" },
-						},
-					},
-				});
-			}
-
-			if (url.endsWith("/SessionInfo.json")) {
-				return jsonResponse({
-					Meeting: {
-						OfficialName: "Australian Grand Prix",
-						Name: "Australian Grand Prix",
-					},
-				});
-			}
-
-			throw new Error(`Unexpected URL: ${url}`);
-		});
+		mockSnapshot(
+			"2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Media_Day/",
+			"Australian Grand Prix",
+			{
+				"1": {
+					Position: "1",
+					RacingNumber: "1",
+					BestLapTime: { Value: "1:15.111" },
+				},
+			},
+		);
 
 		await fetchResults("2026/2026-03-08_Australian_Grand_Prix/2026-03-07_Media_Day/");
 
@@ -423,36 +400,22 @@ describe("fetchResults", () => {
 			return { rows: [] };
 		});
 
-		fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
-			const url = requestUrl(input);
-			if (url.endsWith("/TimingDataF1.json")) {
-				return jsonResponse({
-					Lines: {
-						"63": {
-							Position: "1",
-							RacingNumber: "63",
-							BestLapTime: { Value: "1:12.578" },
-						},
-						"12": {
-							Position: "2",
-							RacingNumber: "12",
-							BestLapTime: { Value: "1:12.646" },
-						},
-					},
-				});
-			}
-
-			if (url.endsWith("/SessionInfo.json")) {
-				return jsonResponse({
-					Meeting: {
-						OfficialName: "Canadian Grand Prix",
-						Name: "Canadian Grand Prix",
-					},
-				});
-			}
-
-			throw new Error(`Unexpected URL: ${url}`);
-		});
+		mockSnapshot(
+			"2026/2026-05-24_Canadian_Grand_Prix/2026-05-23_Qualifying/",
+			"Canadian Grand Prix",
+			{
+				"63": {
+					Position: "1",
+					RacingNumber: "63",
+					BestLapTime: { Value: "1:12.578" },
+				},
+				"12": {
+					Position: "2",
+					RacingNumber: "12",
+					BestLapTime: { Value: "1:12.646" },
+				},
+			},
+		);
 
 		getEventTypeNameMock.mockResolvedValue("Qualifying");
 		const path = "2026/2026-05-24_Canadian_Grand_Prix/2026-05-23_Qualifying/";
